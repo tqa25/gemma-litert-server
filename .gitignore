@@ -1,0 +1,9 @@
+build/
+logs/
+models/
+*.class
+*.jar
+__pycache__/
+.gradle/
+.kotlin/
+!gradle/wrapper/gradle-wrapper.jar

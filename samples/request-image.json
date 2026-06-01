@@ -1,0 +1,6 @@
+{
+  "prompt": "Extract visible text from this image",
+  "image_base64": "VGhpcyBpcyBhIHNhbXBsZSBpbWFnZSBwYXlsb2FkIHBsYWNlaG9sZGVyLgo=",
+  "max_tokens": 128,
+  "temperature": 0.1
+}
