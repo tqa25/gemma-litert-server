@@ -1,4 +1,5 @@
 plugins {
+    id("com.android.application") version "8.7.3" apply false
     application
     id("org.jetbrains.kotlin.jvm") version "2.3.0"
 }
