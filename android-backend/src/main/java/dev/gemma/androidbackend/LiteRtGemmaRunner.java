@@ -29,6 +29,8 @@ final class LiteRtGemmaRunner implements GemmaRunner {
         new Backend.CPU(),
         new Backend.CPU(),
         null,
+        null,
+        1,
         cacheDir
     );
     engine = new Engine(config);
