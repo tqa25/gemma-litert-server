@@ -40,6 +40,19 @@ class ImageUploadOptionsTest(unittest.TestCase):
         self.assertEqual(prepared.preprocess_ms, 0)
         self.assertFalse(prepared.resized)
 
+    def test_summarize_benchmark_runs_calculates_min_avg_max(self) -> None:
+        runs = [
+            {"timing": {"inference_ms": 100, "total_ms": 150}},
+            {"timing": {"inference_ms": 200, "total_ms": 250}},
+            {"timing": {"inference_ms": 300, "total_ms": 350}},
+        ]
+
+        summary = client.summarize_benchmark_runs(runs)
+
+        self.assertEqual(summary["runs"], 3)
+        self.assertEqual(summary["inference_ms"], {"min": 100, "avg": 200, "max": 300})
+        self.assertEqual(summary["total_ms"], {"min": 150, "avg": 250, "max": 350})
+
 
 if __name__ == "__main__":
     unittest.main()

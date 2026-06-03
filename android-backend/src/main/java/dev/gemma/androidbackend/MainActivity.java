@@ -7,6 +7,8 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.database.Cursor;
 import android.view.Gravity;
@@ -23,8 +25,17 @@ import java.util.concurrent.Executors;
 public final class MainActivity extends Activity {
   private static final int REQUEST_PICK_MODEL = 2001;
   private final ExecutorService copyExecutor = Executors.newSingleThreadExecutor();
+  private final Handler diagnosticsHandler = new Handler(Looper.getMainLooper());
+  private final Runnable diagnosticsRefresh = new Runnable() {
+    @Override
+    public void run() {
+      refreshDiagnosticsStatus();
+      diagnosticsHandler.postDelayed(this, 1000L);
+    }
+  };
   private TextView status;
   private TextView modelStatus;
+  private TextView diagnosticsStatus;
   private Button startLiteRt;
 
   @Override
@@ -43,6 +54,10 @@ public final class MainActivity extends Activity {
 
     modelStatus = new TextView(this);
     layout.addView(modelStatus);
+
+    diagnosticsStatus = new TextView(this);
+    diagnosticsStatus.setPadding(0, 24, 0, 24);
+    layout.addView(diagnosticsStatus);
 
     Button pickModel = new Button(this);
     pickModel.setText("Select/Copy Model File");
@@ -71,10 +86,24 @@ public final class MainActivity extends Activity {
 
     setContentView(layout);
     refreshModelStatus();
+    refreshDiagnosticsStatus();
+  }
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    diagnosticsHandler.post(diagnosticsRefresh);
+  }
+
+  @Override
+  protected void onPause() {
+    diagnosticsHandler.removeCallbacks(diagnosticsRefresh);
+    super.onPause();
   }
 
   @Override
   protected void onDestroy() {
+    diagnosticsHandler.removeCallbacks(diagnosticsRefresh);
     copyExecutor.shutdownNow();
     super.onDestroy();
   }
@@ -180,6 +209,7 @@ public final class MainActivity extends Activity {
       startService(intent);
     }
     status.setText("Starting " + engine + " server on 127.0.0.1:8765\nModel: " + modelPath);
+    refreshDiagnosticsStatus();
   }
 
   private void stopServer() {
@@ -188,6 +218,39 @@ public final class MainActivity extends Activity {
     startService(intent);
     status.setText("Gemma backend stopped");
     refreshModelStatus();
+    refreshDiagnosticsStatus();
+  }
+
+  private void refreshDiagnosticsStatus() {
+    RequestDiagnostics.Snapshot latest = RequestDiagnostics.latest();
+    if ("none".equals(latest.status)) {
+      diagnosticsStatus.setText("Latest request: none");
+      return;
+    }
+    if ("error".equals(latest.status)) {
+      diagnosticsStatus.setText(
+          "Latest request: error"
+              + "\nEngine: " + emptyFallback(latest.engine, "unknown")
+              + "\nError: " + emptyFallback(latest.errorMessage, "unknown"));
+      return;
+    }
+    diagnosticsStatus.setText(
+        "Latest request: success"
+            + "\nEngine: " + latest.engine
+            + "\nImage: " + latest.hasImage + " (" + RequestDiagnostics.humanBytes(latest.imageBytes) + ")"
+            + "\nInference: " + latest.inferenceMs + " ms"
+            + "\nTotal: " + latest.totalMs + " ms"
+            + "\nResponse chars: " + latest.responseChars
+            + "\nRequest: " + shortRequestId(latest.requestId));
+  }
+
+  private static String shortRequestId(String requestId) {
+    if (requestId == null || requestId.length() <= 8) return emptyFallback(requestId, "unknown");
+    return requestId.substring(0, 8);
+  }
+
+  private static String emptyFallback(String value, String fallback) {
+    return value == null || value.isEmpty() ? fallback : value;
   }
 
   private void requestNotificationPermission() {

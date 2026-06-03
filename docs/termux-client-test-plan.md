@@ -68,6 +68,12 @@ pkg install python-pillow
 python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
 ```
 
+For repeated runs, prefer the benchmark helper:
+
+```bash
+python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
+```
+
 Pass if:
 
 ```text
@@ -76,6 +82,7 @@ meta.engine = litert-android-gpu for GPU test
 meta.has_image = true
 meta.image_bytes > 0
 timing.total_ms exists
+Android app latest-request panel shows engine, image bytes, inference time, and total time
 ```
 
 For mock server, the response text should include:

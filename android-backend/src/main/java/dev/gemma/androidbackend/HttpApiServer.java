@@ -34,6 +34,7 @@ final class HttpApiServer extends NanoHTTPD {
       }
       return json(Response.Status.NOT_FOUND, JsonUtil.error("not_found", "Unknown route"));
     } catch (Exception e) {
+      RequestDiagnostics.recordError(runner.name(), e.getMessage());
       return json(Response.Status.BAD_REQUEST, JsonUtil.error("bad_request", e.getMessage()));
     }
   }
@@ -46,7 +47,24 @@ final class HttpApiServer extends NanoHTTPD {
     row.put("model_path", runner.modelPath());
     row.put("model_load_ms", runner.modelLoadMs());
     row.put("uptime_ms", System.currentTimeMillis() - startedAtMs);
+    row.put("last_request", diagnosticsJson());
     return JsonUtil.object(row);
+  }
+
+  private LinkedHashMap<String, Object> diagnosticsJson() {
+    RequestDiagnostics.Snapshot latest = RequestDiagnostics.latest();
+    LinkedHashMap<String, Object> row = new LinkedHashMap<>();
+    row.put("status", latest.status);
+    row.put("request_id", latest.requestId);
+    row.put("engine", latest.engine);
+    row.put("has_image", latest.hasImage);
+    row.put("image_bytes", latest.imageBytes);
+    row.put("inference_ms", latest.inferenceMs);
+    row.put("total_ms", latest.totalMs);
+    row.put("response_chars", latest.responseChars);
+    row.put("error", latest.errorMessage);
+    row.put("updated_at_ms", latest.updatedAtMs);
+    return row;
   }
 
   private Response handleGenerate(IHTTPSession session) throws Exception {
@@ -87,6 +105,14 @@ final class HttpApiServer extends NanoHTTPD {
     log.put("response_chars", result.response.length());
     log.put("success", true);
     logger.append(log);
+    RequestDiagnostics.recordSuccess(
+        requestId,
+        runner.name(),
+        request.hasImage(),
+        imageBytes == null ? 0 : imageBytes.length,
+        result.inferenceMs,
+        totalMs,
+        result.response.length());
 
     LinkedHashMap<String, Object> timing = new LinkedHashMap<>();
     timing.put("inference_ms", result.inferenceMs);

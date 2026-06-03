@@ -42,12 +42,11 @@ def main(argv: list[str] | None = None) -> int:
     text.add_argument("--temperature", type=float, default=0.2)
 
     image = sub.add_parser("generate-image", help="Call POST /generate with prompt + image file.")
-    image.add_argument("-i", "--image", required=True, help="Path to image file on Termux/Android storage.")
-    image.add_argument("--prompt", default="Extract visible text from this image. Return concise text.")
-    image.add_argument("--max-tokens", type=int, default=256)
-    image.add_argument("--temperature", type=float, default=0.1)
-    image.add_argument("--resize-max-edge", type=int, help="Resize image so its longest edge is at most this many pixels.")
-    image.add_argument("--jpeg-quality", type=int, help="Upload as JPEG at this quality, from 1 to 100.")
+    add_image_args(image)
+
+    benchmark = sub.add_parser("benchmark-image", help="Run repeated image requests and summarize timings.")
+    add_image_args(benchmark)
+    benchmark.add_argument("--runs", type=int, default=5, help="Number of repeated image requests.")
 
     args = parser.parse_args(argv)
     try:
@@ -63,37 +62,18 @@ def main(argv: list[str] | None = None) -> int:
             }
             return generate_json(args, payload, has_image=False, image_path=None)
         if args.command == "generate-image":
-            image_path = Path(args.image)
-            image_bytes = image_path.read_bytes()
-            prepared_image = prepare_image_upload(
-                image_path,
-                image_bytes,
-                max_edge=args.resize_max_edge,
-                jpeg_quality=args.jpeg_quality,
-            )
-            fields = {
-                "prompt": args.prompt,
-                "max_tokens": str(args.max_tokens),
-                "temperature": str(args.temperature),
-            }
-            started = time.perf_counter()
-            result = call_multipart_json(
-                f"{args.base_url}/generate",
-                fields,
-                file_field="image",
-                file_path=prepared_image.path,
-                file_bytes=prepared_image.bytes,
-            )
-            client_total_ms = round((time.perf_counter() - started) * 1000)
+            outcome = perform_generate_image(args)
             return finish_generate(
                 args,
-                result,
+                outcome["result"],
                 has_image=True,
-                image_path=str(image_path),
+                image_path=outcome["image_path"],
                 prompt_chars=len(args.prompt),
-                client_total_ms=client_total_ms,
-                image_upload=prepared_image,
+                client_total_ms=outcome["client_total_ms"],
+                image_upload=outcome["image_upload"],
             )
+        if args.command == "benchmark-image":
+            return benchmark_image(args)
     except FileNotFoundError as exc:
         print(f"ERROR: file not found: {exc.filename}", file=sys.stderr)
         return 2
@@ -104,6 +84,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     return 2
+
+
+def add_image_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-i", "--image", required=True, help="Path to image file on Termux/Android storage.")
+    parser.add_argument("--prompt", default="Extract visible text from this image. Return concise text.")
+    parser.add_argument("--max-tokens", type=int, default=256)
+    parser.add_argument("--temperature", type=float, default=0.1)
+    parser.add_argument("--resize-max-edge", type=int, help="Resize image so its longest edge is at most this many pixels.")
+    parser.add_argument("--jpeg-quality", type=int, help="Upload as JPEG at this quality, from 1 to 100.")
 
 
 def generate_json(args: argparse.Namespace, payload: dict, *, has_image: bool, image_path: str | None) -> int:
@@ -120,6 +109,108 @@ def generate_json(args: argparse.Namespace, payload: dict, *, has_image: bool, i
     )
 
 
+def perform_generate_image(args: argparse.Namespace) -> dict:
+    image_path = Path(args.image)
+    image_bytes = image_path.read_bytes()
+    prepared_image = prepare_image_upload(
+        image_path,
+        image_bytes,
+        max_edge=args.resize_max_edge,
+        jpeg_quality=args.jpeg_quality,
+    )
+    fields = {
+        "prompt": args.prompt,
+        "max_tokens": str(args.max_tokens),
+        "temperature": str(args.temperature),
+    }
+    started = time.perf_counter()
+    result = call_multipart_json(
+        f"{args.base_url}/generate",
+        fields,
+        file_field="image",
+        file_path=prepared_image.path,
+        file_bytes=prepared_image.bytes,
+    )
+    client_total_ms = round((time.perf_counter() - started) * 1000)
+    return {
+        "result": result,
+        "image_path": str(image_path),
+        "image_upload": prepared_image,
+        "client_total_ms": client_total_ms,
+    }
+
+
+def benchmark_image(args: argparse.Namespace) -> int:
+    if args.runs < 1:
+        raise ValueError("--runs must be at least 1")
+    runs = []
+    last_upload = None
+    for index in range(args.runs):
+        outcome = perform_generate_image(args)
+        result = outcome["result"]
+        last_upload = outcome["image_upload"]
+        finish_generate(
+            args,
+            result,
+            has_image=True,
+            image_path=outcome["image_path"],
+            prompt_chars=len(args.prompt),
+            client_total_ms=outcome["client_total_ms"],
+            image_upload=last_upload,
+            print_response=False,
+        )
+        timing = result.get("timing", {})
+        meta = result.get("meta", {})
+        run = {
+            "run": index + 1,
+            "request_id": result.get("request_id"),
+            "timing": timing,
+            "client_total_ms": outcome["client_total_ms"],
+            "engine": meta.get("engine"),
+            "image_bytes": meta.get("image_bytes"),
+            "response_chars": len(result.get("response", "")),
+        }
+        runs.append(run)
+        print(
+            "run {}/{}: total_ms={} inference_ms={} image_bytes={}".format(
+                index + 1,
+                args.runs,
+                timing.get("total_ms"),
+                timing.get("inference_ms"),
+                meta.get("image_bytes"),
+            ),
+            file=sys.stderr,
+        )
+    summary = summarize_benchmark_runs(runs)
+    summary.update({
+        "image_path": args.image,
+        "resize_max_edge": args.resize_max_edge,
+        "jpeg_quality": args.jpeg_quality,
+        "image_original_bytes": last_upload.original_bytes if last_upload else None,
+        "image_upload_bytes": last_upload.upload_bytes if last_upload else None,
+        "image_preprocess_ms_last": last_upload.preprocess_ms if last_upload else None,
+        "runs_detail": runs,
+    })
+    print_json(summary)
+    return 0
+
+
+def summarize_benchmark_runs(runs: list[dict]) -> dict:
+    return {
+        "runs": len(runs),
+        "inference_ms": summarize_numbers([run.get("timing", {}).get("inference_ms") for run in runs]),
+        "total_ms": summarize_numbers([run.get("timing", {}).get("total_ms") for run in runs]),
+        "client_total_ms": summarize_numbers([run.get("client_total_ms") for run in runs]),
+    }
+
+
+def summarize_numbers(values: list[int | None]) -> dict[str, int | None]:
+    numbers = [int(value) for value in values if value is not None]
+    if not numbers:
+        return {"min": None, "avg": None, "max": None}
+    return {"min": min(numbers), "avg": round(sum(numbers) / len(numbers)), "max": max(numbers)}
+
+
 def finish_generate(
     args: argparse.Namespace,
     result: dict,
@@ -129,8 +220,10 @@ def finish_generate(
     prompt_chars: int,
     client_total_ms: int,
     image_upload: PreparedImageUpload | None = None,
+    print_response: bool = True,
 ) -> int:
-    print_json(result)
+    if print_response:
+        print_json(result)
     append_benchmark(
         Path(args.benchmark_log),
         {

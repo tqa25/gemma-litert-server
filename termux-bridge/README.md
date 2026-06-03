@@ -44,6 +44,16 @@ pkg install python-pillow
 python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."
 ```
 
+## Benchmark image
+
+Run repeated image requests and summarize timings:
+
+```bash
+python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."
+```
+
+Per-run progress is printed to stderr. The final stdout value is JSON with min/avg/max for `inference_ms`, `total_ms`, and `client_total_ms`.
+
 ## Benchmark log
 
 Image requests are sent as multipart file uploads, not base64 JSON, so large screenshots are handled more reliably.

@@ -49,6 +49,7 @@ public final class ServerService extends Service {
   private void startServer(String engineName, String modelPath) {
     try {
       if (server != null) return;
+      RequestDiagnostics.clear();
       if (engineName.toLowerCase(java.util.Locale.US).startsWith("litert")) {
         File modelFile = new File(modelPath);
         if (!modelFile.exists()) {
@@ -65,6 +66,7 @@ public final class ServerService extends Service {
       NotificationManager manager = getSystemService(NotificationManager.class);
       manager.notify(1001, notification("Gemma backend running on 127.0.0.1:8765 (" + runner.name() + ")"));
     } catch (Exception e) {
+      RequestDiagnostics.recordError(engineName, e.getMessage());
       android.util.Log.e("GemmaBackend", "failed to start server", e);
       NotificationManager manager = getSystemService(NotificationManager.class);
       manager.notify(1001, notification("Gemma backend failed: " + e.getMessage()));
@@ -82,6 +84,7 @@ public final class ServerService extends Service {
     } catch (Exception e) {
       android.util.Log.e("GemmaBackend", "failed to close runner", e);
     }
+    RequestDiagnostics.clear();
     executor.shutdownNow();
     super.onDestroy();
   }
