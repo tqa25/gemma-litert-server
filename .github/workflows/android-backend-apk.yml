@@ -7,8 +7,7 @@ on:
       - android-backend-app
   pull_request:
   workflow_dispatch:
-  schedule:
-    - cron: '*/5 * * * *'
+
 
 permissions:
   contents: read
