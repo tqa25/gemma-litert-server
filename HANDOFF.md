@@ -30,8 +30,9 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 
 ## Recent Commits
 
+- `121f12a` Add Android request diagnostics and image benchmark helper
+- `6bfb9a8` Update handoff with benchmark checkpoint
 - `dd61f0c` Add Termux image preprocessing benchmark options
-- `89d4fab` Add project handoff summary
 - `6d6444c` Increase Gradle heap for Android APK packaging
 - `04f1672` Enable LiteRT GPU backend on Android
 - `3af9a1c` Use multipart image upload for Android backend
@@ -43,12 +44,15 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - Termux `generate-image` supports optional `--resize-max-edge` and `--jpeg-quality` preprocessing before multipart upload. This requires Pillow only when preprocessing is requested.
 - Benchmark rows now include `image_original_bytes`, `image_upload_bytes`, `image_preprocess_ms`, and `image_resized` for image requests.
 - Android backend reads multipart `image` part and reports `meta.image_bytes`.
+- Android app shows a latest-request diagnostics panel with engine, image bytes, inference time, total time, response chars, request id prefix, and errors.
+- `/health` includes a `last_request` diagnostics object.
 - LiteRT GPU backend is enabled with `Backend.GPU()` for both model and vision backend.
 - CPU backend is still available from the app for comparison/debug.
 - Latest successful APK build:
-  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/26893255010`
+  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/26895910326`
+  - Commit: `121f12ab90dda5dfa15df31022b1228b47f2e050`
   - Artifact: `gemma-android-backend-debug-apk`
-  - APK verified locally at download time: `/tmp/apk-artifact-26893255010/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26038433 bytes`
+  - APK verified locally at download time: `/tmp/apk-artifact-26895910326/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26040769 bytes`
 
 ## Latest Device Results
 
@@ -123,7 +127,7 @@ python3 -m py_compile termux-bridge/client.py termux-bridge/test_client.py
 
 Note: local sandbox execution intermittently failed before command startup with `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, so Python checks were run with approved escalation.
 
-GitHub Actions verification passed:
+GitHub Actions verification passed for Termux preprocessing:
 
 ```text
 Workflow: Android Backend APK
@@ -132,6 +136,17 @@ Commit: dd61f0c5864f8a5280132b12cece24bea7dbfb42
 Conclusion: success
 Artifact: gemma-android-backend-debug-apk
 APK size: 26038433 bytes
+```
+
+Latest GitHub Actions verification passed for Android diagnostics and benchmark helper:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/26895910326
+Commit: 121f12ab90dda5dfa15df31022b1228b47f2e050
+Conclusion: success
+Artifact: gemma-android-backend-debug-apk
+APK size: 26040769 bytes
 ```
 
 ## Key Debug History
@@ -149,11 +164,12 @@ APK size: 26038433 bytes
 
 ## Next Useful Work
 
-1. Add Android app diagnostics for the latest request: engine, image bytes, inference time, total time, and request status visible in the UI.
-2. Add a small benchmark helper in Termux to run N repeated requests and summarize min/avg/max from `benchmark.jsonl`.
+1. Install and test APK from run `26895910326` on ROG Phone 6. Verify the latest-request diagnostics panel updates after text/image requests.
+2. On Termux, run `benchmark-image --runs 5` for original image and `1280 / JPEG 85`; compare CLI summary with Android diagnostics panel.
 3. Decide whether the default user-facing preset should be original image or `1280 / JPEG 85`, depending on OCR accuracy tolerance.
-4. Consider a streaming endpoint later if the workflow needs first-token latency rather than total latency.
-5. Keep `Start LiteRT CPU Server` as a debug comparator, but default future testing to `Start LiteRT GPU Server`.
+4. Consider adding a `/diagnostics` endpoint if direct health polling is not enough for external tools.
+5. Consider a streaming endpoint later if the workflow needs first-token latency rather than total latency.
+6. Keep `Start LiteRT CPU Server` as a debug comparator, but default future testing to `Start LiteRT GPU Server`.
 
 ## Fresh Session Instruction
 
