@@ -16,7 +16,7 @@ This phase intentionally does not add voice, Accessibility, Shizuku, or CLI-agen
 2. Android app is open.
 3. For mock test: press `Start Mock Server`.
 4. For real model test: tap `Select/Copy Model File`, choose `gemma-4-E4B-it.litertlm`, and wait until the app reports the model is ready in app storage.
-5. Press `Start LiteRT Server`.
+5. Press `Start LiteRT GPU Server` for the fast path. Use `Start LiteRT CPU Server` only for comparison/debug.
 
 ## Termux setup
 
@@ -65,6 +65,7 @@ Pass if:
 
 ```text
 response is non-empty
+meta.engine = litert-android-gpu for GPU test
 meta.has_image = true
 meta.image_bytes > 0
 timing.total_ms exists

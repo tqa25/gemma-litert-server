@@ -13,21 +13,24 @@ import com.google.ai.edge.litertlm.SamplerConfig;
 final class LiteRtGemmaRunner implements GemmaRunner {
   private final String modelPath;
   private final String cacheDir;
+  private final boolean useGpu;
   private Engine engine;
   private long modelLoadMs;
 
-  LiteRtGemmaRunner(String modelPath, String cacheDir) {
+  LiteRtGemmaRunner(String modelPath, String cacheDir, boolean useGpu) {
     this.modelPath = modelPath;
     this.cacheDir = cacheDir;
+    this.useGpu = useGpu;
   }
 
   @Override
   public void initialize() {
     long start = System.nanoTime();
+    Backend backend = useGpu ? new Backend.GPU() : new Backend.CPU();
     EngineConfig config = new EngineConfig(
         modelPath,
-        new Backend.CPU(),
-        new Backend.CPU(),
+        backend,
+        backend,
         null,
         null,
         1,
@@ -39,7 +42,7 @@ final class LiteRtGemmaRunner implements GemmaRunner {
   }
 
   @Override
-  public String name() { return "litert-android"; }
+  public String name() { return useGpu ? "litert-android-gpu" : "litert-android-cpu"; }
 
   @Override
   public boolean isLoaded() { return engine != null; }
@@ -61,7 +64,7 @@ final class LiteRtGemmaRunner implements GemmaRunner {
         Contents.Companion.of("You are a concise OCR and image understanding backend."),
         java.util.Collections.emptyList(),
         java.util.Collections.emptyList(),
-        new SamplerConfig(64, 0.95, request.temperature, 0)
+        new SamplerConfig(request.maxTokens, 0.95, request.temperature, 0)
     );
     String text;
     try (Conversation conversation = engine.createConversation(conversationConfig)) {

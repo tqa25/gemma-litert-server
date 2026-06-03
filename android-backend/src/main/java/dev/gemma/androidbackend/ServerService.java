@@ -49,12 +49,13 @@ public final class ServerService extends Service {
   private void startServer(String engineName, String modelPath) {
     try {
       if (server != null) return;
-      if ("litert".equalsIgnoreCase(engineName)) {
+      if (engineName.toLowerCase(java.util.Locale.US).startsWith("litert")) {
         File modelFile = new File(modelPath);
         if (!modelFile.exists()) {
           throw new IllegalStateException("Selected model file does not exist: " + modelPath);
         }
-        runner = new LiteRtGemmaRunner(modelPath, getCacheDir().getAbsolutePath());
+        boolean useGpu = !"litert-cpu".equalsIgnoreCase(engineName);
+        runner = new LiteRtGemmaRunner(modelPath, getCacheDir().getAbsolutePath(), useGpu);
       } else {
         runner = new MockGemmaRunner(modelPath);
       }

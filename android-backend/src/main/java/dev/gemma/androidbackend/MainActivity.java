@@ -55,9 +55,14 @@ public final class MainActivity extends Activity {
     layout.addView(startMock);
 
     startLiteRt = new Button(this);
-    startLiteRt.setText("Start LiteRT Server");
-    startLiteRt.setOnClickListener(v -> startServer("litert"));
+    startLiteRt.setText("Start LiteRT GPU Server");
+    startLiteRt.setOnClickListener(v -> startServer("litert-gpu"));
     layout.addView(startLiteRt);
+
+    Button startLiteRtCpu = new Button(this);
+    startLiteRtCpu.setText("Start LiteRT CPU Server");
+    startLiteRtCpu.setOnClickListener(v -> startServer("litert-cpu"));
+    layout.addView(startLiteRtCpu);
 
     Button stop = new Button(this);
     stop.setText("Stop Server");
