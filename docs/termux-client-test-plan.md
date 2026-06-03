@@ -66,8 +66,17 @@ Pass if:
 ```text
 response is non-empty
 meta.has_image = true
+meta.image_bytes > 0
 timing.total_ms exists
 ```
+
+For mock server, the response text should include:
+
+```text
+image_bytes=...
+```
+
+If mock returns `no_image`, stop and fix the HTTP upload path before testing LiteRT.
 
 ## Metrics to record
 

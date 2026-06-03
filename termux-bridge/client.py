@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
+import mimetypes
+import secrets
 import sys
 import time
 import urllib.error
@@ -29,7 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     text.add_argument("--temperature", type=float, default=0.2)
 
     image = sub.add_parser("generate-image", help="Call POST /generate with prompt + image file.")
-    image.add_argument("--image", required=True, help="Path to image file on Termux/Android storage.")
+    image.add_argument("-i", "--image", required=True, help="Path to image file on Termux/Android storage.")
     image.add_argument("--prompt", default="Extract visible text from this image. Return concise text.")
     image.add_argument("--max-tokens", type=int, default=256)
     image.add_argument("--temperature", type=float, default=0.1)
@@ -46,17 +47,32 @@ def main(argv: list[str] | None = None) -> int:
                 "max_tokens": args.max_tokens,
                 "temperature": args.temperature,
             }
-            return generate(args, payload, has_image=False, image_path=None)
+            return generate_json(args, payload, has_image=False, image_path=None)
         if args.command == "generate-image":
             image_path = Path(args.image)
             image_bytes = image_path.read_bytes()
-            payload = {
+            fields = {
                 "prompt": args.prompt,
-                "image_base64": base64.b64encode(image_bytes).decode("ascii"),
-                "max_tokens": args.max_tokens,
-                "temperature": args.temperature,
+                "max_tokens": str(args.max_tokens),
+                "temperature": str(args.temperature),
             }
-            return generate(args, payload, has_image=True, image_path=str(image_path))
+            started = time.perf_counter()
+            result = call_multipart_json(
+                f"{args.base_url}/generate",
+                fields,
+                file_field="image",
+                file_path=image_path,
+                file_bytes=image_bytes,
+            )
+            client_total_ms = round((time.perf_counter() - started) * 1000)
+            return finish_generate(
+                args,
+                result,
+                has_image=True,
+                image_path=str(image_path),
+                prompt_chars=len(args.prompt),
+                client_total_ms=client_total_ms,
+            )
     except FileNotFoundError as exc:
         print(f"ERROR: file not found: {exc.filename}", file=sys.stderr)
         return 2
@@ -69,10 +85,29 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def generate(args: argparse.Namespace, payload: dict, *, has_image: bool, image_path: str | None) -> int:
+def generate_json(args: argparse.Namespace, payload: dict, *, has_image: bool, image_path: str | None) -> int:
     started = time.perf_counter()
     result = call_json("POST", f"{args.base_url}/generate", payload)
     client_total_ms = round((time.perf_counter() - started) * 1000)
+    return finish_generate(
+        args,
+        result,
+        has_image=has_image,
+        image_path=image_path,
+        prompt_chars=len(payload.get("prompt", "")),
+        client_total_ms=client_total_ms,
+    )
+
+
+def finish_generate(
+    args: argparse.Namespace,
+    result: dict,
+    *,
+    has_image: bool,
+    image_path: str | None,
+    prompt_chars: int,
+    client_total_ms: int,
+) -> int:
     print_json(result)
     append_benchmark(
         Path(args.benchmark_log),
@@ -80,8 +115,9 @@ def generate(args: argparse.Namespace, payload: dict, *, has_image: bool, image_
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "base_url": args.base_url,
             "has_image": has_image,
+            "server_has_image": result.get("meta", {}).get("has_image"),
             "image_path": image_path,
-            "prompt_chars": len(payload.get("prompt", "")),
+            "prompt_chars": prompt_chars,
             "client_total_ms": client_total_ms,
             "server_timing": result.get("timing", {}),
             "engine": result.get("meta", {}).get("engine"),
@@ -102,6 +138,40 @@ def call_json(method: str, url: str, payload: dict | None = None) -> dict:
     with urllib.request.urlopen(request, timeout=300) as response:
         raw = response.read().decode("utf-8")
     return json.loads(raw)
+
+
+def call_multipart_json(url: str, fields: dict[str, str], *, file_field: str, file_path: Path, file_bytes: bytes) -> dict:
+    boundary = "----gemma-termux-" + secrets.token_hex(12)
+    body = build_multipart_body(boundary, fields, file_field=file_field, file_path=file_path, file_bytes=file_bytes)
+    headers = {
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(body)),
+    }
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(request, timeout=300) as response:
+        raw = response.read().decode("utf-8")
+    return json.loads(raw)
+
+
+def build_multipart_body(boundary: str, fields: dict[str, str], *, file_field: str, file_path: Path, file_bytes: bytes) -> bytes:
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.extend([
+            f"--{boundary}\r\n".encode("utf-8"),
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+            value.encode("utf-8"),
+            b"\r\n",
+        ])
+    content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    chunks.extend([
+        f"--{boundary}\r\n".encode("utf-8"),
+        f'Content-Disposition: form-data; name="{file_field}"; filename="{file_path.name}"\r\n'.encode("utf-8"),
+        f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+        file_bytes,
+        b"\r\n",
+        f"--{boundary}--\r\n".encode("utf-8"),
+    ])
+    return b"".join(chunks)
 
 
 def append_benchmark(path: Path, row: dict) -> None:

@@ -2,8 +2,9 @@ package dev.gemma.androidbackend;
 
 import android.content.Context;
 import fi.iki.elonen.NanoHTTPD;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -53,25 +54,23 @@ final class HttpApiServer extends NanoHTTPD {
     long started = System.nanoTime();
     Map<String, String> files = new java.util.HashMap<>();
     session.parseBody(files);
+    Map<String, String> params = session.getParms();
     String body = files.get("postData");
     if (body == null) body = "";
 
-    String prompt = JsonUtil.stringValue(body, "prompt");
+    String prompt = firstNonEmpty(params.get("prompt"), JsonUtil.stringValue(body, "prompt"));
     if (prompt == null || prompt.trim().isEmpty()) throw new IllegalArgumentException("Missing required field: prompt");
     if (prompt.length() > BackendConfig.MAX_PROMPT_CHARS) throw new IllegalArgumentException("prompt too long");
 
-    String imageBase64 = JsonUtil.stringValue(body, "image_base64");
-    byte[] imageBytes = null;
-    if (imageBase64 != null && !imageBase64.isEmpty()) {
-      imageBytes = Base64.getDecoder().decode(imageBase64.getBytes(StandardCharsets.UTF_8));
-      if (imageBytes.length > BackendConfig.MAX_IMAGE_BYTES) throw new IllegalArgumentException("image too large");
-    }
+    byte[] imageBytes = imageBytesFromMultipart(files);
+    if (imageBytes == null) imageBytes = imageBytesFromJson(body);
+    if (imageBytes != null && imageBytes.length > BackendConfig.MAX_IMAGE_BYTES) throw new IllegalArgumentException("image too large");
 
     GenerationRequest request = new GenerationRequest(
         prompt,
         imageBytes,
-        JsonUtil.intValue(body, "max_tokens", 256),
-        JsonUtil.doubleValue(body, "temperature", 0.2d));
+        intParam(params, body, "max_tokens", 256),
+        doubleParam(params, body, "temperature", 0.2d));
     GenerationResult result = runner.generate(request);
     long totalMs = (System.nanoTime() - started) / 1_000_000L;
 
@@ -96,6 +95,7 @@ final class HttpApiServer extends NanoHTTPD {
     meta.put("engine", runner.name());
     meta.put("has_image", request.hasImage());
     meta.put("prompt_chars", prompt.length());
+    meta.put("image_bytes", imageBytes == null ? 0 : imageBytes.length);
     meta.put("response_chars", result.response.length());
     meta.put("output_tokens_estimate", result.outputTokensEstimate);
     LinkedHashMap<String, Object> response = new LinkedHashMap<>();
@@ -104,6 +104,37 @@ final class HttpApiServer extends NanoHTTPD {
     response.put("timing", timing);
     response.put("meta", meta);
     return json(Response.Status.OK, JsonUtil.object(response));
+  }
+
+  private static byte[] imageBytesFromMultipart(Map<String, String> files) throws Exception {
+    String path = firstNonEmpty(files.get("image"), files.get("image_file"), files.get("file"));
+    if (path == null) return null;
+    return Files.readAllBytes(Paths.get(path));
+  }
+
+  private static byte[] imageBytesFromJson(String body) {
+    String imageBase64 = JsonUtil.stringValue(body, "image_base64");
+    if (imageBase64 == null || imageBase64.isEmpty()) return null;
+    return Base64.getDecoder().decode(imageBase64.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static int intParam(Map<String, String> params, String body, String key, int defaultValue) {
+    String value = firstNonEmpty(params.get(key), JsonUtil.stringValue(body, key));
+    if (value == null) return JsonUtil.intValue(body, key, defaultValue);
+    return Integer.parseInt(value);
+  }
+
+  private static double doubleParam(Map<String, String> params, String body, String key, double defaultValue) {
+    String value = firstNonEmpty(params.get(key), JsonUtil.stringValue(body, key));
+    if (value == null) return JsonUtil.doubleValue(body, key, defaultValue);
+    return Double.parseDouble(value);
+  }
+
+  private static String firstNonEmpty(String... values) {
+    for (String value : values) {
+      if (value != null && !value.isEmpty()) return value;
+    }
+    return null;
   }
 
   private static Response json(Response.Status status, String body) {

@@ -39,6 +39,8 @@ python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.p
 
 ## Benchmark log
 
+Image requests are sent as multipart file uploads, not base64 JSON, so large screenshots are handled more reliably.
+
 Every generate request appends a JSONL row:
 
 ```text
