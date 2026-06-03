@@ -15,13 +15,8 @@ This phase intentionally does not add voice, Accessibility, Shizuku, or CLI-agen
 1. APK is installed on ROG Phone 6.
 2. Android app is open.
 3. For mock test: press `Start Mock Server`.
-4. For real model test: copy model to:
-
-```text
-/sdcard/Models/gemma-4-E4B-it.litertlm
-```
-
-Then press `Start LiteRT Server`.
+4. For real model test: tap `Select/Copy Model File`, choose `gemma-4-E4B-it.litertlm`, and wait until the app reports the model is ready in app storage.
+5. Press `Start LiteRT Server`.
 
 ## Termux setup
 

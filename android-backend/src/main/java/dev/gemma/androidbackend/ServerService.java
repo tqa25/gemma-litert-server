@@ -15,6 +15,7 @@ public final class ServerService extends Service {
   public static final String ACTION_START = "dev.gemma.androidbackend.START";
   public static final String ACTION_STOP = "dev.gemma.androidbackend.STOP";
   public static final String EXTRA_ENGINE = "engine";
+  public static final String EXTRA_MODEL_PATH = "model_path";
   private static final String CHANNEL_ID = "gemma-backend";
 
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -37,16 +38,22 @@ public final class ServerService extends Service {
     startForeground(1001, notification("Starting Gemma backend..."));
     String engine = intent == null ? BackendConfig.DEFAULT_ENGINE : intent.getStringExtra(EXTRA_ENGINE);
     if (engine == null || engine.isEmpty()) engine = BackendConfig.DEFAULT_ENGINE;
+    String modelPath = intent == null ? null : intent.getStringExtra(EXTRA_MODEL_PATH);
+    if (modelPath == null || modelPath.isEmpty()) modelPath = BackendConfig.selectedModelPath(this);
     final String selectedEngine = engine;
-    executor.submit(() -> startServer(selectedEngine));
+    final String selectedModelPath = modelPath;
+    executor.submit(() -> startServer(selectedEngine, selectedModelPath));
     return START_STICKY;
   }
 
-  private void startServer(String engineName) {
+  private void startServer(String engineName, String modelPath) {
     try {
       if (server != null) return;
-      String modelPath = BackendConfig.defaultModelPath();
       if ("litert".equalsIgnoreCase(engineName)) {
+        File modelFile = new File(modelPath);
+        if (!modelFile.exists()) {
+          throw new IllegalStateException("Selected model file does not exist: " + modelPath);
+        }
         runner = new LiteRtGemmaRunner(modelPath, getCacheDir().getAbsolutePath());
       } else {
         runner = new MockGemmaRunner(modelPath);
