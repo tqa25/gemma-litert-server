@@ -12,7 +12,7 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 
 - Repo path: `/home/ubuntu/workspaces2/projects/gemma-litert-server`
 - Branch: `docs/vietnamese-guide-android-plan`
-- Worktree at handoff: clean
+- Worktree at handoff: dirty with local Termux preprocessing changes; see `git status --short`.
 
 ## Important Artifacts
 
@@ -21,6 +21,7 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - Benchmark plan: `docs/benchmark-plan.md`
 - Termux test plan: `docs/termux-client-test-plan.md`
 - Termux client: `termux-bridge/client.py`
+- Termux client tests: `termux-bridge/test_client.py`
 - Android backend entry points:
   - `android-backend/src/main/java/dev/gemma/androidbackend/MainActivity.java`
   - `android-backend/src/main/java/dev/gemma/androidbackend/ServerService.java`
@@ -39,6 +40,8 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 
 - Model picker copies `gemma-4-E4B-it.litertlm` from shared storage into app-private storage.
 - Termux `generate-image` now sends image as `multipart/form-data`, not base64 JSON.
+- Termux `generate-image` supports optional `--resize-max-edge` and `--jpeg-quality` preprocessing before multipart upload. This requires Pillow only when preprocessing is requested.
+- Benchmark rows now include `image_original_bytes`, `image_upload_bytes`, `image_preprocess_ms`, and `image_resized` for image requests.
 - Android backend reads multipart `image` part and reports `meta.image_bytes`.
 - LiteRT GPU backend is enabled with `Backend.GPU()` for both model and vision backend.
 - CPU backend is still available from the app for comparison/debug.
@@ -70,6 +73,29 @@ OCR quality: good Vietnamese text extraction
 
 This is faster than the user's Edge Gallery measurement on the same image/model, which was about 18 seconds.
 
+## Latest Local Work
+
+Added optional Termux-side image preprocessing for upload/latency experiments:
+
+```bash
+python3 termux-bridge/client.py generate-image \
+  --image /sdcard/Download/test.png \
+  --resize-max-edge 1280 \
+  --jpeg-quality 85 \
+  --prompt "Extract visible text from this image. Return concise text."
+```
+
+Documented the compressed-run workflow in `termux-bridge/README.md` and `docs/termux-client-test-plan.md`.
+
+Local verification passed:
+
+```bash
+python3 -m unittest termux-bridge/test_client.py
+python3 -m py_compile termux-bridge/client.py termux-bridge/test_client.py
+```
+
+Note: local sandbox execution intermittently failed before command startup with `bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, so Python checks were run with approved escalation.
+
 ## Key Debug History
 
 - Initial `/sdcard/Models/...` direct model path failed with `PERMISSION_DENIED`; fixed by model picker + copy to app-private storage.
@@ -86,7 +112,7 @@ This is faster than the user's Edge Gallery measurement on the same image/model,
 ## Next Useful Work
 
 1. Run a 5-run benchmark on the same image to separate cold-start and warm-start latency.
-2. Add optional Termux-side image resize/compress before upload and compare quality vs latency.
+2. On ROG Phone 6, compare original upload vs `--resize-max-edge 1280 --jpeg-quality 85` for OCR quality, `image_upload_bytes`, `image_preprocess_ms`, and server `inference_ms`.
 3. Consider a streaming endpoint later if the workflow needs first-token latency rather than total latency.
 4. Keep `Start LiteRT CPU Server` as a debug comparator, but default future testing to `Start LiteRT GPU Server`.
 

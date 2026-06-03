@@ -61,6 +61,13 @@ meta.engine
 python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
 ```
 
+Optional compressed run for latency/quality comparison:
+
+```bash
+pkg install python-pillow
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
+```
+
 Pass if:
 
 ```text
@@ -91,6 +98,7 @@ server timing.inference_ms
 server timing.total_ms
 response quality note
 image size and screenshot type
+image_original_bytes, image_upload_bytes, image_preprocess_ms, image_resized from termux-bridge/benchmark.jsonl
 ```
 
 ## Decision gate
@@ -101,4 +109,5 @@ Continue to Termux CLI wrapper only after:
 Mock server passes health/text/image.
 LiteRT server passes health/text/image.
 Image latency and quality are recorded for at least 3 real screenshots.
+Compressed-image latency and OCR quality are compared against the original upload on the same screenshot.
 ```

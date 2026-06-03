@@ -37,6 +37,13 @@ python3 termux-bridge/client.py generate-text   --prompt "Say hello in Vietnames
 python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --prompt "Extract visible text from this image. Return concise text."
 ```
 
+Optional image preprocessing can reduce upload and vision input size before the request reaches the Android app:
+
+```bash
+pkg install python-pillow
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."
+```
+
 ## Benchmark log
 
 Image requests are sent as multipart file uploads, not base64 JSON, so large screenshots are handled more reliably.
@@ -48,3 +55,4 @@ termux-bridge/benchmark.jsonl
 ```
 
 Use this to compare Mock vs LiteRT and ROG Phone 6 vs Oracle VM.
+For image requests, the log also records original upload bytes, preprocessed upload bytes, preprocessing time, and whether the image was resized.

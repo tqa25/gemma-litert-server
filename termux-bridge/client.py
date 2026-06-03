@@ -9,11 +9,23 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8765"
 DEFAULT_BENCHMARK_LOG = Path("termux-bridge/benchmark.jsonl")
+
+
+@dataclass(frozen=True)
+class PreparedImageUpload:
+    path: Path
+    bytes: bytes
+    original_bytes: int
+    upload_bytes: int
+    preprocess_ms: int
+    resized: bool
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,6 +46,8 @@ def main(argv: list[str] | None = None) -> int:
     image.add_argument("--prompt", default="Extract visible text from this image. Return concise text.")
     image.add_argument("--max-tokens", type=int, default=256)
     image.add_argument("--temperature", type=float, default=0.1)
+    image.add_argument("--resize-max-edge", type=int, help="Resize image so its longest edge is at most this many pixels.")
+    image.add_argument("--jpeg-quality", type=int, help="Upload as JPEG at this quality, from 1 to 100.")
 
     args = parser.parse_args(argv)
     try:
@@ -51,6 +65,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "generate-image":
             image_path = Path(args.image)
             image_bytes = image_path.read_bytes()
+            prepared_image = prepare_image_upload(
+                image_path,
+                image_bytes,
+                max_edge=args.resize_max_edge,
+                jpeg_quality=args.jpeg_quality,
+            )
             fields = {
                 "prompt": args.prompt,
                 "max_tokens": str(args.max_tokens),
@@ -61,8 +81,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"{args.base_url}/generate",
                 fields,
                 file_field="image",
-                file_path=image_path,
-                file_bytes=image_bytes,
+                file_path=prepared_image.path,
+                file_bytes=prepared_image.bytes,
             )
             client_total_ms = round((time.perf_counter() - started) * 1000)
             return finish_generate(
@@ -72,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
                 image_path=str(image_path),
                 prompt_chars=len(args.prompt),
                 client_total_ms=client_total_ms,
+                image_upload=prepared_image,
             )
     except FileNotFoundError as exc:
         print(f"ERROR: file not found: {exc.filename}", file=sys.stderr)
@@ -107,6 +128,7 @@ def finish_generate(
     image_path: str | None,
     prompt_chars: int,
     client_total_ms: int,
+    image_upload: PreparedImageUpload | None = None,
 ) -> int:
     print_json(result)
     append_benchmark(
@@ -117,6 +139,10 @@ def finish_generate(
             "has_image": has_image,
             "server_has_image": result.get("meta", {}).get("has_image"),
             "image_path": image_path,
+            "image_original_bytes": image_upload.original_bytes if image_upload else None,
+            "image_upload_bytes": image_upload.upload_bytes if image_upload else None,
+            "image_preprocess_ms": image_upload.preprocess_ms if image_upload else None,
+            "image_resized": image_upload.resized if image_upload else None,
             "prompt_chars": prompt_chars,
             "client_total_ms": client_total_ms,
             "server_timing": result.get("timing", {}),
@@ -126,6 +152,62 @@ def finish_generate(
         },
     )
     return 0
+
+
+def prepare_image_upload(
+    image_path: Path,
+    image_bytes: bytes,
+    *,
+    max_edge: int | None,
+    jpeg_quality: int | None,
+) -> PreparedImageUpload:
+    if max_edge is None and jpeg_quality is None:
+        return PreparedImageUpload(
+            path=image_path,
+            bytes=image_bytes,
+            original_bytes=len(image_bytes),
+            upload_bytes=len(image_bytes),
+            preprocess_ms=0,
+            resized=False,
+        )
+    if max_edge is not None and max_edge < 1:
+        raise ValueError("--resize-max-edge must be at least 1")
+    if jpeg_quality is not None and not 1 <= jpeg_quality <= 100:
+        raise ValueError("--jpeg-quality must be between 1 and 100")
+
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise RuntimeError(
+            "image preprocessing requires Pillow; install it in Termux with `pkg install python-pillow`"
+        ) from exc
+
+    started = time.perf_counter()
+    with Image.open(BytesIO(image_bytes)) as image:
+        original_size = image.size
+        if max_edge is not None:
+            image.thumbnail((max_edge, max_edge))
+        resized = image.size != original_size
+        upload_path = image_path
+        if jpeg_quality is not None:
+            upload_path = image_path.with_suffix(".jpg")
+            image = image.convert("RGB")
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=jpeg_quality, optimize=True)
+            upload_bytes = output.getvalue()
+        else:
+            output = BytesIO()
+            image.save(output, format=image.format or "PNG")
+            upload_bytes = output.getvalue()
+    preprocess_ms = round((time.perf_counter() - started) * 1000)
+    return PreparedImageUpload(
+        path=upload_path,
+        bytes=upload_bytes,
+        original_bytes=len(image_bytes),
+        upload_bytes=len(upload_bytes),
+        preprocess_ms=preprocess_ms,
+        resized=resized,
+    )
 
 
 def call_json(method: str, url: str, payload: dict | None = None) -> dict:
