@@ -37,19 +37,21 @@ python3 termux-bridge/client.py generate-text   --prompt "Say hello in Vietnames
 python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --prompt "Extract visible text from this image. Return concise text."
 ```
 
-Optional image preprocessing can reduce upload and vision input size before the request reaches the Android app:
+Optional presets make the tested quality/speed tradeoff easier to use:
 
 ```bash
 pkg install python-pillow
-python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --preset speed   --prompt "Extract visible text from this image. Return concise text."
 ```
+
+Use `--preset accuracy` to upload the original image. Explicit `--resize-max-edge` or `--jpeg-quality` values override a preset.
 
 ## Benchmark image
 
 Run repeated image requests and summarize timings:
 
 ```bash
-python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."
+python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --preset speed   --prompt "Extract visible text from this image. Return concise text."
 ```
 
 Per-run progress is printed to stderr. The final stdout value is JSON with min/avg/max for `inference_ms`, `total_ms`, and `client_total_ms`.

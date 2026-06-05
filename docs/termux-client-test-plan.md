@@ -65,13 +65,15 @@ Optional compressed run for latency/quality comparison:
 
 ```bash
 pkg install python-pillow
-python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --preset speed   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
 ```
+
+Use `--preset accuracy` for original-image OCR quality. Explicit `--resize-max-edge` or `--jpeg-quality` values override a preset.
 
 For repeated runs, prefer the benchmark helper:
 
 ```bash
-python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --resize-max-edge 1280   --jpeg-quality 85   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
+python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --preset speed   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
 ```
 
 Pass if:

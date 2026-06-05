@@ -16,6 +16,14 @@ from pathlib import Path
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8765"
 DEFAULT_BENCHMARK_LOG = Path("termux-bridge/benchmark.jsonl")
+PRESET_SPEED = "speed"
+PRESET_ACCURACY = "accuracy"
+
+
+@dataclass(frozen=True)
+class ImageOptions:
+    max_edge: int | None
+    jpeg_quality: int | None
 
 
 @dataclass(frozen=True)
@@ -91,8 +99,28 @@ def add_image_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--prompt", default="Extract visible text from this image. Return concise text.")
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--temperature", type=float, default=0.1)
+    parser.add_argument(
+        "--preset",
+        choices=[PRESET_SPEED, PRESET_ACCURACY],
+        help="Image preprocessing preset: speed uses 1280/JPEG85, accuracy uploads the original image.",
+    )
     parser.add_argument("--resize-max-edge", type=int, help="Resize image so its longest edge is at most this many pixels.")
     parser.add_argument("--jpeg-quality", type=int, help="Upload as JPEG at this quality, from 1 to 100.")
+
+
+def resolve_image_options(preset: str | None, *, max_edge: int | None, jpeg_quality: int | None) -> ImageOptions:
+    resolved_max_edge = max_edge
+    resolved_jpeg_quality = jpeg_quality
+    if preset == PRESET_SPEED:
+        if resolved_max_edge is None:
+            resolved_max_edge = 1280
+        if resolved_jpeg_quality is None:
+            resolved_jpeg_quality = 85
+    elif preset == PRESET_ACCURACY or preset is None:
+        pass
+    else:
+        raise ValueError(f"unknown preset: {preset}")
+    return ImageOptions(max_edge=resolved_max_edge, jpeg_quality=resolved_jpeg_quality)
 
 
 def generate_json(args: argparse.Namespace, payload: dict, *, has_image: bool, image_path: str | None) -> int:
@@ -112,11 +140,12 @@ def generate_json(args: argparse.Namespace, payload: dict, *, has_image: bool, i
 def perform_generate_image(args: argparse.Namespace) -> dict:
     image_path = Path(args.image)
     image_bytes = image_path.read_bytes()
+    options = resolve_image_options(args.preset, max_edge=args.resize_max_edge, jpeg_quality=args.jpeg_quality)
     prepared_image = prepare_image_upload(
         image_path,
         image_bytes,
-        max_edge=args.resize_max_edge,
-        jpeg_quality=args.jpeg_quality,
+        max_edge=options.max_edge,
+        jpeg_quality=options.jpeg_quality,
     )
     fields = {
         "prompt": args.prompt,
@@ -136,6 +165,7 @@ def perform_generate_image(args: argparse.Namespace) -> dict:
         "result": result,
         "image_path": str(image_path),
         "image_upload": prepared_image,
+        "image_options": options,
         "client_total_ms": client_total_ms,
     }
 
@@ -145,10 +175,12 @@ def benchmark_image(args: argparse.Namespace) -> int:
         raise ValueError("--runs must be at least 1")
     runs = []
     last_upload = None
+    last_options = None
     for index in range(args.runs):
         outcome = perform_generate_image(args)
         result = outcome["result"]
         last_upload = outcome["image_upload"]
+        last_options = outcome["image_options"]
         finish_generate(
             args,
             result,
@@ -184,8 +216,9 @@ def benchmark_image(args: argparse.Namespace) -> int:
     summary = summarize_benchmark_runs(runs)
     summary.update({
         "image_path": args.image,
-        "resize_max_edge": args.resize_max_edge,
-        "jpeg_quality": args.jpeg_quality,
+        "preset": args.preset,
+        "resize_max_edge": last_options.max_edge if last_options else args.resize_max_edge,
+        "jpeg_quality": last_options.jpeg_quality if last_options else args.jpeg_quality,
         "image_original_bytes": last_upload.original_bytes if last_upload else None,
         "image_upload_bytes": last_upload.upload_bytes if last_upload else None,
         "image_preprocess_ms_last": last_upload.preprocess_ms if last_upload else None,
@@ -236,6 +269,7 @@ def finish_generate(
             "image_upload_bytes": image_upload.upload_bytes if image_upload else None,
             "image_preprocess_ms": image_upload.preprocess_ms if image_upload else None,
             "image_resized": image_upload.resized if image_upload else None,
+            "image_preset": getattr(args, "preset", None),
             "prompt_chars": prompt_chars,
             "client_total_ms": client_total_ms,
             "server_timing": result.get("timing", {}),

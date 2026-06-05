@@ -53,6 +53,24 @@ class ImageUploadOptionsTest(unittest.TestCase):
         self.assertEqual(summary["inference_ms"], {"min": 100, "avg": 200, "max": 300})
         self.assertEqual(summary["total_ms"], {"min": 150, "avg": 250, "max": 350})
 
+    def test_speed_preset_applies_1280_jpeg_85(self) -> None:
+        options = client.resolve_image_options("speed", max_edge=None, jpeg_quality=None)
+
+        self.assertEqual(options.max_edge, 1280)
+        self.assertEqual(options.jpeg_quality, 85)
+
+    def test_accuracy_preset_keeps_original_image(self) -> None:
+        options = client.resolve_image_options("accuracy", max_edge=None, jpeg_quality=None)
+
+        self.assertIsNone(options.max_edge)
+        self.assertIsNone(options.jpeg_quality)
+
+    def test_explicit_options_override_preset(self) -> None:
+        options = client.resolve_image_options("speed", max_edge=1600, jpeg_quality=90)
+
+        self.assertEqual(options.max_edge, 1600)
+        self.assertEqual(options.jpeg_quality, 90)
+
 
 if __name__ == "__main__":
     unittest.main()

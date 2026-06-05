@@ -42,6 +42,7 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - Model picker copies `gemma-4-E4B-it.litertlm` from shared storage into app-private storage.
 - Termux `generate-image` now sends image as `multipart/form-data`, not base64 JSON.
 - Termux `generate-image` supports optional `--resize-max-edge` and `--jpeg-quality` preprocessing before multipart upload. This requires Pillow only when preprocessing is requested.
+- Termux image commands support `--preset speed` (`1280 / JPEG 85`) and `--preset accuracy` (original image). Explicit resize/quality flags override presets.
 - Benchmark rows now include `image_original_bytes`, `image_upload_bytes`, `image_preprocess_ms`, and `image_resized` for image requests.
 - Android backend reads multipart `image` part and reports `meta.image_bytes`.
 - Android app shows a latest-request diagnostics panel with engine, image bytes, inference time, total time, response chars, request id prefix, and errors.
@@ -91,7 +92,7 @@ latency improvement vs original: ~15%
 OCR quality: acceptable, but slightly worse on small Vietnamese text
 ```
 
-Recommended speed preset: `--resize-max-edge 1280 --jpeg-quality 85`.
+Recommended speed preset: `--preset speed` (`1280 / JPEG 85`).
 
 ### Resize 1600 / JPEG 90
 
@@ -111,8 +112,7 @@ Added optional Termux-side image preprocessing for upload/latency experiments:
 ```bash
 python3 termux-bridge/client.py generate-image \
   --image /sdcard/Download/test.png \
-  --resize-max-edge 1280 \
-  --jpeg-quality 85 \
+  --preset speed \
   --prompt "Extract visible text from this image. Return concise text."
 ```
 
@@ -149,6 +149,15 @@ Artifact: gemma-android-backend-debug-apk
 APK size: 26040769 bytes
 ```
 
+Latest Termux-only verification for image presets:
+
+```bash
+python3 -m unittest termux-bridge/test_client.py
+python3 -m py_compile termux-bridge/client.py termux-bridge/test_client.py
+python3 termux-bridge/client.py generate-image --help
+python3 termux-bridge/client.py benchmark-image --help
+```
+
 ## Key Debug History
 
 - Initial `/sdcard/Models/...` direct model path failed with `PERMISSION_DENIED`; fixed by model picker + copy to app-private storage.
@@ -164,9 +173,9 @@ APK size: 26040769 bytes
 
 ## Next Useful Work
 
-1. Install and test APK from run `26895910326` on ROG Phone 6. Verify the latest-request diagnostics panel updates after text/image requests.
-2. On Termux, run `benchmark-image --runs 5` for original image and `1280 / JPEG 85`; compare CLI summary with Android diagnostics panel.
-3. Decide whether the default user-facing preset should be original image or `1280 / JPEG 85`, depending on OCR accuracy tolerance.
+1. On Termux, pull latest and use `--preset speed` for the measured fast path or `--preset accuracy` for original-image OCR.
+2. Run `benchmark-image --runs 5 --preset speed` across 3-5 real screenshots and record OCR quality notes.
+3. Decide whether the next app-level default should expose a speed/accuracy choice or keep presets Termux-only.
 4. Consider adding a `/diagnostics` endpoint if direct health polling is not enough for external tools.
 5. Consider a streaming endpoint later if the workflow needs first-token latency rather than total latency.
 6. Keep `Start LiteRT CPU Server` as a debug comparator, but default future testing to `Start LiteRT GPU Server`.
