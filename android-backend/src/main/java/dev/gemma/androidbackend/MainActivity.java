@@ -25,6 +25,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -33,15 +34,21 @@ import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 public final class MainActivity extends Activity {
   private static final int REQUEST_PICK_MODEL = 2001;
   private static final int REQUEST_PICK_OCR_IMAGE = 2002;
   private static final String DEFAULT_BACKEND_URL = "http://127.0.0.1:8765";
+  private static final int MAX_OCR_HISTORY = 20;
   private static final String PREFS_NAME = "gemma_android_backend";
   private static final String PREF_BACKEND_URL = "backend_url";
   private static final String PREF_OCR_MODE = "ocr_mode";
@@ -65,6 +72,7 @@ public final class MainActivity extends Activity {
   private TextView ocrImageStatus;
   private TextView ocrModeStatus;
   private TextView ocrResult;
+  private TextView historyStatus;
   private EditText backendUrlInput;
   private Button startLiteRt;
   private Button selectOcrImageButton;
@@ -72,6 +80,7 @@ public final class MainActivity extends Activity {
   private Button fullModeButton;
   private Button runOcrButton;
   private Button copyOcrButton;
+  private LinearLayout historyList;
   private Uri selectedOcrImage;
   private String selectedOcrMode = OCR_MODE_FAST;
   private String lastOcrText = "";
@@ -178,11 +187,29 @@ public final class MainActivity extends Activity {
     ocrResult.setText("OCR result: none");
     layout.addView(ocrResult);
 
+    TextView historyTitle = new TextView(this);
+    historyTitle.setPadding(0, 32, 0, 8);
+    historyTitle.setText("OCR History");
+    layout.addView(historyTitle);
+
+    historyStatus = new TextView(this);
+    layout.addView(historyStatus);
+
+    Button clearHistory = new Button(this);
+    clearHistory.setText("Clear OCR History");
+    clearHistory.setOnClickListener(v -> clearOcrHistory());
+    layout.addView(clearHistory);
+
+    historyList = new LinearLayout(this);
+    historyList.setOrientation(LinearLayout.VERTICAL);
+    layout.addView(historyList);
+
     setContentView(scroll);
     refreshModelStatus();
     refreshDiagnosticsStatus();
     refreshOcrModeStatus();
     setOcrRunning(false);
+    refreshHistoryList();
   }
 
   @Override
@@ -295,15 +322,17 @@ public final class MainActivity extends Activity {
       return;
     }
     String backendUrl = normalizedBackendUrl();
+    String imageName = displayName(image);
+    String modeName = selectedOcrMode;
     saveOcrPreferences();
-    OcrMode mode = OcrMode.from(selectedOcrMode);
+    OcrMode mode = OcrMode.from(modeName);
     setOcrRunning(true);
-    ocrResult.setText("Preparing " + selectedOcrMode + " OCR..." + "\nBackend: " + backendUrl);
+    ocrResult.setText("Preparing " + modeName + " OCR..." + "\nBackend: " + backendUrl);
     copyExecutor.submit(() -> {
       try {
         OcrUpload upload = prepareOcrUpload(image, mode);
         runOnUiThread(() -> ocrResult.setText(
-            "Running " + selectedOcrMode + " OCR..."
+            "Running " + modeName + " OCR..."
                 + "\nBackend: " + backendUrl
                 + "\nUpload: " + humanBytes(upload.bytes.length)));
         String raw = postGenerate(backendUrl, mode, upload);
@@ -312,15 +341,21 @@ public final class MainActivity extends Activity {
         int totalMs = JsonUtil.intValue(raw, "total_ms", -1);
         int imageBytes = JsonUtil.intValue(raw, "image_bytes", upload.bytes.length);
         String engine = emptyFallback(JsonUtil.stringValue(raw, "engine"), "unknown");
-        lastOcrText = text;
+        OcrHistoryEntry entry = new OcrHistoryEntry(
+            System.currentTimeMillis(),
+            modeName,
+            backendUrl,
+            engine,
+            imageName,
+            imageBytes,
+            inferenceMs,
+            totalMs,
+            text);
+        saveOcrHistoryEntry(entry);
         runOnUiThread(() -> {
-          ocrResult.setText(
-              "Engine: " + engine
-                  + "\nImage: " + humanBytes(imageBytes)
-                  + "\nInference: " + inferenceMs + " ms"
-                  + "\nTotal: " + totalMs + " ms"
-                  + "\n\n" + text);
+          showOcrEntryResult(entry);
           refreshDiagnosticsStatus();
+          refreshHistoryList();
           setOcrRunning(false);
         });
       } catch (Exception e) {
@@ -438,6 +473,110 @@ public final class MainActivity extends Activity {
     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
     clipboard.setPrimaryClip(ClipData.newPlainText("OCR text", lastOcrText));
     status.setText("OCR text copied to clipboard.");
+  }
+
+  private void showOcrEntryResult(OcrHistoryEntry entry) {
+    lastOcrText = entry.text;
+    ocrResult.setText(
+        "Engine: " + emptyFallback(entry.engine, "unknown")
+            + "\nMode: " + emptyFallback(entry.mode, "unknown")
+            + "\nImage: " + humanBytes(entry.imageBytes)
+            + "\nInference: " + entry.inferenceMs + " ms"
+            + "\nTotal: " + entry.totalMs + " ms"
+            + "\nSource: " + emptyFallback(entry.imageName, "unknown")
+            + "\nSaved: " + formatHistoryTime(entry.timestampMs)
+            + "\n\n" + entry.text);
+    setOcrRunning(false);
+  }
+
+  private void refreshHistoryList() {
+    if (historyList == null || historyStatus == null) return;
+    ArrayList<OcrHistoryEntry> entries = loadOcrHistory();
+    historyList.removeAllViews();
+    historyStatus.setText(entries.isEmpty() ? "History: none" : "History: " + entries.size() + " saved result(s)");
+    for (OcrHistoryEntry entry : entries) {
+      Button item = new Button(this);
+      item.setAllCaps(false);
+      item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+      item.setText(historyLabel(entry));
+      item.setOnClickListener(v -> {
+        showOcrEntryResult(entry);
+        status.setText("Loaded OCR history item.");
+      });
+      historyList.addView(item);
+    }
+  }
+
+  private void clearOcrHistory() {
+    File file = ocrHistoryFile();
+    if (file.exists() && !file.delete()) {
+      status.setText("Could not clear OCR history.");
+      return;
+    }
+    lastOcrText = "";
+    ocrResult.setText("OCR result: none");
+    setOcrRunning(false);
+    refreshHistoryList();
+    status.setText("OCR history cleared.");
+  }
+
+  private void saveOcrHistoryEntry(OcrHistoryEntry entry) {
+    ArrayList<OcrHistoryEntry> entries = loadOcrHistory();
+    entries.add(0, entry);
+    while (entries.size() > MAX_OCR_HISTORY) entries.remove(entries.size() - 1);
+    saveOcrHistory(entries);
+  }
+
+  private ArrayList<OcrHistoryEntry> loadOcrHistory() {
+    ArrayList<OcrHistoryEntry> entries = new ArrayList<>();
+    File file = ocrHistoryFile();
+    if (!file.exists()) return entries;
+    try (InputStream in = new FileInputStream(file)) {
+      String raw = new String(readAll(in), StandardCharsets.UTF_8);
+      JSONArray array = new JSONArray(raw);
+      for (int i = 0; i < array.length(); i++) {
+        JSONObject item = array.optJSONObject(i);
+        if (item == null) continue;
+        entries.add(OcrHistoryEntry.fromJson(item));
+      }
+    } catch (Exception ignored) {
+      // A corrupt history file should not block new OCR runs. The next successful run will rewrite it.
+    }
+    return entries;
+  }
+
+  private void saveOcrHistory(ArrayList<OcrHistoryEntry> entries) {
+    JSONArray array = new JSONArray();
+    for (OcrHistoryEntry entry : entries) {
+      array.put(entry.toJson());
+    }
+    try (FileOutputStream out = new FileOutputStream(ocrHistoryFile())) {
+      out.write(array.toString().getBytes(StandardCharsets.UTF_8));
+    } catch (Exception e) {
+      runOnUiThread(() -> status.setText("Could not save OCR history: " + e.getMessage()));
+    }
+  }
+
+  private File ocrHistoryFile() {
+    return new File(getFilesDir(), "ocr_history.json");
+  }
+
+  private static String historyLabel(OcrHistoryEntry entry) {
+    return formatHistoryTime(entry.timestampMs)
+        + " | " + emptyFallback(entry.mode, "?")
+        + " | " + entry.totalMs + " ms"
+        + " | " + emptyFallback(entry.imageName, "image")
+        + "\n" + preview(entry.text);
+  }
+
+  private static String preview(String text) {
+    String value = emptyFallback(text, "").replaceAll("\\s+", " ").trim();
+    if (value.length() <= 120) return value;
+    return value.substring(0, 120) + "...";
+  }
+
+  private static String formatHistoryTime(long timestampMs) {
+    return new SimpleDateFormat("MM-dd HH:mm:ss", Locale.US).format(new Date(timestampMs));
   }
 
   private long copyUriToFile(Uri uri, File target) throws Exception {
@@ -596,6 +735,70 @@ public final class MainActivity extends Activity {
     if (bytes >= 1024L * 1024L) return String.format(Locale.US, "%.2f MB", bytes / 1024.0 / 1024.0);
     if (bytes >= 1024L) return String.format(Locale.US, "%.2f KB", bytes / 1024.0);
     return bytes + " B";
+  }
+
+  private static final class OcrHistoryEntry {
+    final long timestampMs;
+    final String mode;
+    final String backendUrl;
+    final String engine;
+    final String imageName;
+    final int imageBytes;
+    final int inferenceMs;
+    final int totalMs;
+    final String text;
+
+    OcrHistoryEntry(
+        long timestampMs,
+        String mode,
+        String backendUrl,
+        String engine,
+        String imageName,
+        int imageBytes,
+        int inferenceMs,
+        int totalMs,
+        String text) {
+      this.timestampMs = timestampMs;
+      this.mode = mode;
+      this.backendUrl = backendUrl;
+      this.engine = engine;
+      this.imageName = imageName;
+      this.imageBytes = imageBytes;
+      this.inferenceMs = inferenceMs;
+      this.totalMs = totalMs;
+      this.text = text;
+    }
+
+    JSONObject toJson() {
+      JSONObject object = new JSONObject();
+      try {
+        object.put("timestamp_ms", timestampMs);
+        object.put("mode", mode);
+        object.put("backend_url", backendUrl);
+        object.put("engine", engine);
+        object.put("image_name", imageName);
+        object.put("image_bytes", imageBytes);
+        object.put("inference_ms", inferenceMs);
+        object.put("total_ms", totalMs);
+        object.put("text", text);
+      } catch (Exception ignored) {
+        // JSONObject.put with simple scalar values should not fail in normal use.
+      }
+      return object;
+    }
+
+    static OcrHistoryEntry fromJson(JSONObject object) {
+      return new OcrHistoryEntry(
+          object.optLong("timestamp_ms", 0L),
+          object.optString("mode", ""),
+          object.optString("backend_url", ""),
+          object.optString("engine", ""),
+          object.optString("image_name", ""),
+          object.optInt("image_bytes", -1),
+          object.optInt("inference_ms", -1),
+          object.optInt("total_ms", -1),
+          object.optString("text", ""));
+    }
   }
 
   private static final class HttpStatusException extends Exception {

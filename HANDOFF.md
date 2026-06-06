@@ -16,6 +16,8 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 
 ## Important Artifacts
 
+- Progress and startup memory: `PROGRESS.md`
+- System architecture: `docs/architecture.md`
 - Android backend plan: `ANDROID_BACKEND_APP_PLAN.md`
 - APK Actions debug runbook: `GITHUB_ACTIONS_APK_DEBUG_RUNBOOK.md`
 - Benchmark plan: `docs/benchmark-plan.md`
@@ -52,6 +54,7 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - Android app now includes an OCR Runner UI: backend URL input, image picker, Fast OCR, Full OCR, Run OCR, selectable result text, and copy-to-clipboard. User confirmed on-device UI test passed through steps 1-6 on ROG Phone 6.
 - Android OCR Runner calls HTTP `/generate` through the same localhost boundary instead of calling `GemmaRunner` directly, so the UI can later point to another host such as an Oracle VM backend.
 - Fast OCR in Android UI resizes longest edge to 1280px and JPEG 85 before multipart upload; Full OCR uploads the original image and uses the line-preserving prompt with 768 max tokens. The UI now persists backend URL and OCR mode, disables OCR controls while a request is running, shows upload/loading state, and formats common backend errors more clearly.
+- Android app stores OCR History locally in app-private `ocr_history.json`, keeping 20 recent successful OCR results with text and metadata only. History items can be tapped to restore/copy text without rerunning inference, and can be cleared from the app.
 - `/health` includes a `last_request` diagnostics object.
 - LiteRT GPU backend is enabled with `Backend.GPU()` for both model and vision backend.
 - CPU backend is still available from the app for comparison/debug.
@@ -193,7 +196,8 @@ Suggested device test flow:
 
 ## Next Useful Work
 
-1. Install the next UX-polish APK and verify URL/mode persistence, disabled controls during OCR, loading text, copy button state, and clearer errors when the backend is stopped.
+0. In every new session, read `PROGRESS.md`, `docs/architecture.md`, and this `HANDOFF.md` before changing files. After meaningful codebase/runtime/API/build/benchmark changes, update `PROGRESS.md`; if architecture changes, update `docs/architecture.md` too.
+1. Install the next OCR History APK and verify successful OCR results are saved, survive app restart, can be tapped to restore/copy text, and can be cleared.
 2. Run `benchmark-image --runs 3 --ocr-mode fast` and `--ocr-mode full` across 3-5 real screenshots and record OCR quality notes.
 3. Decide whether the next app-level default should expose fast/full OCR choices or keep modes Termux-only.
 4. Consider adding a `/diagnostics` endpoint if direct health polling is not enough for external tools.
@@ -205,5 +209,8 @@ Suggested device test flow:
 In a new chat, start with:
 
 ```text
-Read HANDOFF.md, then continue work in /home/ubuntu/workspaces2/projects/gemma-litert-server.
+Work in /home/ubuntu/workspaces2/projects/gemma-litert-server.
+Before changing anything, read PROGRESS.md, docs/architecture.md, and HANDOFF.md.
+Summarize the current architecture, progress, known working state, and next recommended steps.
+Whenever you change the codebase, runtime behavior, API contract, build workflow, docs, or device benchmark conclusions, update PROGRESS.md before finishing. If architecture changes, update docs/architecture.md too.
 ```
