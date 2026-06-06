@@ -122,13 +122,13 @@ Latest successful APK build currently recorded in handoff:
 
 ```text
 Workflow: Android Backend APK
-Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27066327222
-Commit: 4e33c70284f4ca3010b33a69ac6e896378044d82
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27071567879
+Commit: 90d798a883da4dcd4b70b7b66c44fc3cdbe90130
 Artifact: gemma-android-backend-debug-apk
-APK size: 26051306 bytes
+APK size: 26088578 bytes
 ```
 
-User confirmed the Android OCR Runner UI worked on-device through the requested test flow.
+This APK includes the initial Shizuku automation API and `chrome-discover-gemini-summary-once` workflow. User previously confirmed the Android OCR Runner UI worked on-device through the requested test flow; automation still needs ROG Phone 6 device validation.
 
 ## Device Results So Far
 
@@ -228,6 +228,17 @@ python3 -m py_compile termux-bridge/automation_client.py
 python3 termux-bridge/automation_client.py --help
 python3 termux-bridge/automation_client.py run --help
 ./gradlew :android-backend:compileDebugJavaWithJavac -x :android-backend:processDebugResources --stacktrace
+```
+
+Latest automation APK build verification:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27071567879
+Commit: 90d798a883da4dcd4b70b7b66c44fc3cdbe90130
+Artifact: gemma-android-backend-debug-apk
+Downloaded APK: /tmp/apk-artifact-27071567879/gemma-android-backend-debug-apk/android-backend-debug.apk
+APK size: 26088578 bytes
 ```
 
 Automation device commands after installing an APK built on GitHub Actions:
