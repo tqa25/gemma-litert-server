@@ -57,23 +57,25 @@ meta.engine
 
 ### 3. Image generation
 
-```bash
-python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
-```
-
-Optional compressed run for latency/quality comparison:
+Fast OCR for UI/social screenshots:
 
 ```bash
 pkg install python-pillow
-python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --preset speed   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --ocr-mode fast
 ```
 
-Use `--preset accuracy` for original-image OCR quality. Explicit `--resize-max-edge` or `--jpeg-quality` values override a preset.
+Full OCR for dense pages/documents:
+
+```bash
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --ocr-mode full
+```
+
+Use lower-level `--preset`, `--prompt`, `--max-tokens`, `--resize-max-edge`, or `--jpeg-quality` flags to override an OCR mode.
 
 For repeated runs, prefer the benchmark helper:
 
 ```bash
-python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --preset speed   --prompt "Extract visible text from this image. Return concise text."   --max-tokens 256   --temperature 0.1
+python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --ocr-mode fast
 ```
 
 Pass if:

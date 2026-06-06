@@ -71,6 +71,40 @@ class ImageUploadOptionsTest(unittest.TestCase):
         self.assertEqual(options.max_edge, 1600)
         self.assertEqual(options.jpeg_quality, 90)
 
+    def test_fast_ocr_mode_applies_speed_defaults(self) -> None:
+        options = client.resolve_ocr_options(
+            "fast", preset=None, prompt=None, max_tokens=None, resize_max_edge=None, jpeg_quality=None
+        )
+
+        self.assertEqual(options.preset, "speed")
+        self.assertEqual(options.max_tokens, 256)
+        self.assertIn("concise text", options.prompt)
+
+    def test_full_ocr_mode_applies_accuracy_defaults(self) -> None:
+        options = client.resolve_ocr_options(
+            "full", preset=None, prompt=None, max_tokens=None, resize_max_edge=None, jpeg_quality=None
+        )
+
+        self.assertEqual(options.preset, "accuracy")
+        self.assertEqual(options.max_tokens, 768)
+        self.assertIn("Preserve line breaks", options.prompt)
+
+    def test_explicit_prompt_and_tokens_override_ocr_mode(self) -> None:
+        options = client.resolve_ocr_options(
+            "full",
+            preset="speed",
+            prompt="custom",
+            max_tokens=123,
+            resize_max_edge=1600,
+            jpeg_quality=90,
+        )
+
+        self.assertEqual(options.preset, "speed")
+        self.assertEqual(options.prompt, "custom")
+        self.assertEqual(options.max_tokens, 123)
+        self.assertEqual(options.image.max_edge, 1600)
+        self.assertEqual(options.image.jpeg_quality, 90)
+
 
 if __name__ == "__main__":
     unittest.main()

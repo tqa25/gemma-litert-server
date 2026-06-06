@@ -18,12 +18,25 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8765"
 DEFAULT_BENCHMARK_LOG = Path("termux-bridge/benchmark.jsonl")
 PRESET_SPEED = "speed"
 PRESET_ACCURACY = "accuracy"
+OCR_MODE_FAST = "fast"
+OCR_MODE_FULL = "full"
+DEFAULT_FAST_PROMPT = "Extract visible text from this image. Return concise text."
+DEFAULT_FULL_PROMPT = "Extract all visible text from this image. Preserve line breaks. Return only the text."
 
 
 @dataclass(frozen=True)
 class ImageOptions:
     max_edge: int | None
     jpeg_quality: int | None
+
+
+@dataclass(frozen=True)
+class OcrOptions:
+    mode: str | None
+    preset: str | None
+    prompt: str
+    max_tokens: int
+    image: ImageOptions
 
 
 @dataclass(frozen=True)
@@ -76,9 +89,10 @@ def main(argv: list[str] | None = None) -> int:
                 outcome["result"],
                 has_image=True,
                 image_path=outcome["image_path"],
-                prompt_chars=len(args.prompt),
+                prompt_chars=len(outcome["ocr_options"].prompt),
                 client_total_ms=outcome["client_total_ms"],
                 image_upload=outcome["image_upload"],
+                ocr_options=outcome["ocr_options"],
             )
         if args.command == "benchmark-image":
             return benchmark_image(args)
@@ -96,8 +110,13 @@ def main(argv: list[str] | None = None) -> int:
 
 def add_image_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-i", "--image", required=True, help="Path to image file on Termux/Android storage.")
-    parser.add_argument("--prompt", default="Extract visible text from this image. Return concise text.")
-    parser.add_argument("--max-tokens", type=int, default=256)
+    parser.add_argument(
+        "--ocr-mode",
+        choices=[OCR_MODE_FAST, OCR_MODE_FULL],
+        help="OCR workflow preset: fast uses speed/256-token concise OCR, full uses accuracy/768-token line-preserving OCR.",
+    )
+    parser.add_argument("--prompt")
+    parser.add_argument("--max-tokens", type=int)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument(
         "--preset",
@@ -106,6 +125,49 @@ def add_image_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--resize-max-edge", type=int, help="Resize image so its longest edge is at most this many pixels.")
     parser.add_argument("--jpeg-quality", type=int, help="Upload as JPEG at this quality, from 1 to 100.")
+
+
+def resolve_ocr_options(
+    mode: str | None,
+    *,
+    preset: str | None,
+    prompt: str | None,
+    max_tokens: int | None,
+    resize_max_edge: int | None,
+    jpeg_quality: int | None,
+) -> OcrOptions:
+    resolved_preset = preset
+    resolved_prompt = prompt
+    resolved_max_tokens = max_tokens
+    if mode == OCR_MODE_FAST:
+        if resolved_preset is None:
+            resolved_preset = PRESET_SPEED
+        if resolved_prompt is None:
+            resolved_prompt = DEFAULT_FAST_PROMPT
+        if resolved_max_tokens is None:
+            resolved_max_tokens = 256
+    elif mode == OCR_MODE_FULL:
+        if resolved_preset is None:
+            resolved_preset = PRESET_ACCURACY
+        if resolved_prompt is None:
+            resolved_prompt = DEFAULT_FULL_PROMPT
+        if resolved_max_tokens is None:
+            resolved_max_tokens = 768
+    elif mode is None:
+        if resolved_prompt is None:
+            resolved_prompt = DEFAULT_FAST_PROMPT
+        if resolved_max_tokens is None:
+            resolved_max_tokens = 256
+    else:
+        raise ValueError(f"unknown ocr mode: {mode}")
+    image = resolve_image_options(resolved_preset, max_edge=resize_max_edge, jpeg_quality=jpeg_quality)
+    return OcrOptions(
+        mode=mode,
+        preset=resolved_preset,
+        prompt=resolved_prompt,
+        max_tokens=resolved_max_tokens,
+        image=image,
+    )
 
 
 def resolve_image_options(preset: str | None, *, max_edge: int | None, jpeg_quality: int | None) -> ImageOptions:
@@ -140,16 +202,23 @@ def generate_json(args: argparse.Namespace, payload: dict, *, has_image: bool, i
 def perform_generate_image(args: argparse.Namespace) -> dict:
     image_path = Path(args.image)
     image_bytes = image_path.read_bytes()
-    options = resolve_image_options(args.preset, max_edge=args.resize_max_edge, jpeg_quality=args.jpeg_quality)
+    options = resolve_ocr_options(
+        args.ocr_mode,
+        preset=args.preset,
+        prompt=args.prompt,
+        max_tokens=args.max_tokens,
+        resize_max_edge=args.resize_max_edge,
+        jpeg_quality=args.jpeg_quality,
+    )
     prepared_image = prepare_image_upload(
         image_path,
         image_bytes,
-        max_edge=options.max_edge,
-        jpeg_quality=options.jpeg_quality,
+        max_edge=options.image.max_edge,
+        jpeg_quality=options.image.jpeg_quality,
     )
     fields = {
-        "prompt": args.prompt,
-        "max_tokens": str(args.max_tokens),
+        "prompt": options.prompt,
+        "max_tokens": str(options.max_tokens),
         "temperature": str(args.temperature),
     }
     started = time.perf_counter()
@@ -165,7 +234,8 @@ def perform_generate_image(args: argparse.Namespace) -> dict:
         "result": result,
         "image_path": str(image_path),
         "image_upload": prepared_image,
-        "image_options": options,
+        "ocr_options": options,
+        "image_options": options.image,
         "client_total_ms": client_total_ms,
     }
 
@@ -186,9 +256,10 @@ def benchmark_image(args: argparse.Namespace) -> int:
             result,
             has_image=True,
             image_path=outcome["image_path"],
-            prompt_chars=len(args.prompt),
+            prompt_chars=len(outcome["ocr_options"].prompt),
             client_total_ms=outcome["client_total_ms"],
             image_upload=last_upload,
+            ocr_options=outcome["ocr_options"],
             print_response=False,
         )
         timing = result.get("timing", {})
@@ -213,12 +284,22 @@ def benchmark_image(args: argparse.Namespace) -> int:
             ),
             file=sys.stderr,
         )
+    resolved = resolve_ocr_options(
+        args.ocr_mode,
+        preset=args.preset,
+        prompt=args.prompt,
+        max_tokens=args.max_tokens,
+        resize_max_edge=args.resize_max_edge,
+        jpeg_quality=args.jpeg_quality,
+    )
     summary = summarize_benchmark_runs(runs)
     summary.update({
         "image_path": args.image,
-        "preset": args.preset,
-        "resize_max_edge": last_options.max_edge if last_options else args.resize_max_edge,
-        "jpeg_quality": last_options.jpeg_quality if last_options else args.jpeg_quality,
+        "ocr_mode": resolved.mode,
+        "preset": resolved.preset,
+        "max_tokens": resolved.max_tokens,
+        "resize_max_edge": last_options.max_edge if last_options else resolved.image.max_edge,
+        "jpeg_quality": last_options.jpeg_quality if last_options else resolved.image.jpeg_quality,
         "image_original_bytes": last_upload.original_bytes if last_upload else None,
         "image_upload_bytes": last_upload.upload_bytes if last_upload else None,
         "image_preprocess_ms_last": last_upload.preprocess_ms if last_upload else None,
@@ -253,6 +334,7 @@ def finish_generate(
     prompt_chars: int,
     client_total_ms: int,
     image_upload: PreparedImageUpload | None = None,
+    ocr_options: OcrOptions | None = None,
     print_response: bool = True,
 ) -> int:
     if print_response:
@@ -269,7 +351,9 @@ def finish_generate(
             "image_upload_bytes": image_upload.upload_bytes if image_upload else None,
             "image_preprocess_ms": image_upload.preprocess_ms if image_upload else None,
             "image_resized": image_upload.resized if image_upload else None,
-            "image_preset": getattr(args, "preset", None),
+            "ocr_mode": ocr_options.mode if ocr_options else getattr(args, "ocr_mode", None),
+            "image_preset": ocr_options.preset if ocr_options else getattr(args, "preset", None),
+            "resolved_max_tokens": ocr_options.max_tokens if ocr_options else getattr(args, "max_tokens", None),
             "prompt_chars": prompt_chars,
             "client_total_ms": client_total_ms,
             "server_timing": result.get("timing", {}),

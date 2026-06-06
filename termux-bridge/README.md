@@ -33,25 +33,27 @@ python3 termux-bridge/client.py generate-text   --prompt "Say hello in Vietnames
 
 ## Test image
 
-```bash
-python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --prompt "Extract visible text from this image. Return concise text."
-```
-
-Optional presets make the tested quality/speed tradeoff easier to use:
+Fast OCR uses the measured speed path: resize to 1280px, JPEG 85, concise output, and 256 max tokens.
 
 ```bash
 pkg install python-pillow
-python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --preset speed   --prompt "Extract visible text from this image. Return concise text."
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --ocr-mode fast
 ```
 
-Use `--preset accuracy` to upload the original image. Explicit `--resize-max-edge` or `--jpeg-quality` values override a preset.
+Full OCR uploads the original image, preserves line breaks, and allows 768 max tokens.
+
+```bash
+python3 termux-bridge/client.py generate-image   --image /sdcard/Download/test.png   --ocr-mode full
+```
+
+Use lower-level `--preset`, `--prompt`, `--max-tokens`, `--resize-max-edge`, or `--jpeg-quality` flags to override an OCR mode.
 
 ## Benchmark image
 
 Run repeated image requests and summarize timings:
 
 ```bash
-python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --preset speed   --prompt "Extract visible text from this image. Return concise text."
+python3 termux-bridge/client.py benchmark-image   --image /sdcard/Download/test.png   --runs 5   --ocr-mode fast
 ```
 
 Per-run progress is printed to stderr. The final stdout value is JSON with min/avg/max for `inference_ms`, `total_ms`, and `client_total_ms`.

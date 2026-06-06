@@ -43,6 +43,7 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - Termux `generate-image` now sends image as `multipart/form-data`, not base64 JSON.
 - Termux `generate-image` supports optional `--resize-max-edge` and `--jpeg-quality` preprocessing before multipart upload. This requires Pillow only when preprocessing is requested.
 - Termux image commands support `--preset speed` (`1280 / JPEG 85`) and `--preset accuracy` (original image). Explicit resize/quality flags override presets.
+- Termux image commands support `--ocr-mode fast` for speed/concise OCR and `--ocr-mode full` for original-image, line-preserving OCR with a higher token limit.
 - Benchmark rows now include `image_original_bytes`, `image_upload_bytes`, `image_preprocess_ms`, and `image_resized` for image requests.
 - Android backend reads multipart `image` part and reports `meta.image_bytes`.
 - Android app shows a latest-request diagnostics panel with engine, image bytes, inference time, total time, response chars, request id prefix, and errors.
@@ -92,7 +93,8 @@ latency improvement vs original: ~15%
 OCR quality: acceptable, but slightly worse on small Vietnamese text
 ```
 
-Recommended speed preset: `--preset speed` (`1280 / JPEG 85`).
+Recommended fast workflow: `--ocr-mode fast` (`speed`, 256 tokens, concise OCR).
+Recommended full workflow for dense text: `--ocr-mode full` (`accuracy`, 768 tokens, line-preserving OCR).
 
 ### Resize 1600 / JPEG 90
 
@@ -112,8 +114,7 @@ Added optional Termux-side image preprocessing for upload/latency experiments:
 ```bash
 python3 termux-bridge/client.py generate-image \
   --image /sdcard/Download/test.png \
-  --preset speed \
-  --prompt "Extract visible text from this image. Return concise text."
+  --ocr-mode fast
 ```
 
 Documented the compressed-run workflow in `termux-bridge/README.md` and `docs/termux-client-test-plan.md`.
@@ -149,7 +150,7 @@ Artifact: gemma-android-backend-debug-apk
 APK size: 26040769 bytes
 ```
 
-Latest Termux-only verification for image presets:
+Latest Termux-only verification for image presets and OCR modes:
 
 ```bash
 python3 -m unittest termux-bridge/test_client.py
@@ -173,9 +174,9 @@ python3 termux-bridge/client.py benchmark-image --help
 
 ## Next Useful Work
 
-1. On Termux, pull latest and use `--preset speed` for the measured fast path or `--preset accuracy` for original-image OCR.
-2. Run `benchmark-image --runs 5 --preset speed` across 3-5 real screenshots and record OCR quality notes.
-3. Decide whether the next app-level default should expose a speed/accuracy choice or keep presets Termux-only.
+1. On Termux, pull latest and use `--ocr-mode fast` for UI/social screenshots or `--ocr-mode full` for dense text pages.
+2. Run `benchmark-image --runs 3 --ocr-mode fast` and `--ocr-mode full` across 3-5 real screenshots and record OCR quality notes.
+3. Decide whether the next app-level default should expose fast/full OCR choices or keep modes Termux-only.
 4. Consider adding a `/diagnostics` endpoint if direct health polling is not enough for external tools.
 5. Consider a streaming endpoint later if the workflow needs first-token latency rather than total latency.
 6. Keep `Start LiteRT CPU Server` as a debug comparator, but default future testing to `Start LiteRT GPU Server`.
