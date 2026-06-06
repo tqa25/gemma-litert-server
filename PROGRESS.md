@@ -79,7 +79,7 @@ The project is not yet a full phone automation agent. Voice, Accessibility, Shiz
 - `termux-bridge/test_client.py`: unit tests for Termux image/OCR option resolution and multipart helpers.
 - `termux-bridge/README.md`: Termux setup and usage.
 - `docs/termux-client-test-plan.md`: device test plan for Termux path.
-- `android-backend/src/main/java/dev/gemma/androidbackend/MainActivity.java`: Android UI, model picker, server controls, OCR Runner.
+- `android-backend/src/main/java/dev/gemma/androidbackend/MainActivity.java`: Android UI, model picker, server controls, OCR Runner, OCR History.
 - `android-backend/src/main/java/dev/gemma/androidbackend/ServerService.java`: foreground service and runner/server lifecycle.
 - `android-backend/src/main/java/dev/gemma/androidbackend/HttpApiServer.java`: NanoHTTPD API server.
 - `android-backend/src/main/java/dev/gemma/androidbackend/LiteRtGemmaRunner.java`: LiteRT-LM Android runner.
@@ -88,6 +88,7 @@ The project is not yet a full phone automation agent. Voice, Accessibility, Shiz
 
 ## Recent Commits
 
+- `4e33c70` Add Android OCR history
 - `1f306c2` Update handoff after OCR UX APK build [skip ci]
 - `d695340` Polish Android OCR runner UX
 - `bb35f16` Update handoff after Android OCR UI APK build
@@ -98,14 +99,14 @@ The project is not yet a full phone automation agent. Voice, Accessibility, Shiz
 
 ## Latest APK Checkpoint
 
-Latest successful APK build currently recorded in handoff; a newer OCR History APK build may supersede this after the current phase:
+Latest successful APK build currently recorded in handoff:
 
 ```text
 Workflow: Android Backend APK
-Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27063108323
-Commit: d695340d6da234ae91e072f1ff9353d3e6171a3d
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27066327222
+Commit: 4e33c70284f4ca3010b33a69ac6e896378044d82
 Artifact: gemma-android-backend-debug-apk
-APK size: 26048350 bytes
+APK size: 26051306 bytes
 ```
 
 User confirmed the Android OCR Runner UI worked on-device through the requested test flow.
