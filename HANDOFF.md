@@ -48,9 +48,9 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - Benchmark rows now include `image_original_bytes`, `image_upload_bytes`, `image_preprocess_ms`, and `image_resized` for image requests.
 - Android backend reads multipart `image` part and reports `meta.image_bytes`.
 - Android app shows a latest-request diagnostics panel with engine, image bytes, inference time, total time, response chars, request id prefix, and errors.
-- Android app now includes an OCR Runner UI: backend URL input, image picker, Fast OCR, Full OCR, Run OCR, selectable result text, and copy-to-clipboard.
+- Android app now includes an OCR Runner UI: backend URL input, image picker, Fast OCR, Full OCR, Run OCR, selectable result text, and copy-to-clipboard. User confirmed on-device UI test passed through steps 1-6 on ROG Phone 6.
 - Android OCR Runner calls HTTP `/generate` through the same localhost boundary instead of calling `GemmaRunner` directly, so the UI can later point to another host such as an Oracle VM backend.
-- Fast OCR in Android UI resizes longest edge to 1280px and JPEG 85 before multipart upload; Full OCR uploads the original image and uses the line-preserving prompt with 768 max tokens.
+- Fast OCR in Android UI resizes longest edge to 1280px and JPEG 85 before multipart upload; Full OCR uploads the original image and uses the line-preserving prompt with 768 max tokens. The UI now persists backend URL and OCR mode, disables OCR controls while a request is running, shows upload/loading state, and formats common backend errors more clearly.
 - `/health` includes a `last_request` diagnostics object.
 - LiteRT GPU backend is enabled with `Backend.GPU()` for both model and vision backend.
 - CPU backend is still available from the app for comparison/debug.
@@ -178,7 +178,7 @@ python3 termux-bridge/client.py benchmark-image --help
 
 ## Latest Android UI Checkpoint
 
-Added Android in-app OCR Runner and verified APK build through GitHub Actions. Local Gradle on Oracle ARM still fails at AAPT2 x86 loader before code compile; GitHub Actions x86_64 is the APK build source of truth.
+Added Android in-app OCR Runner and verified APK build through GitHub Actions. User later confirmed the installed UI works well on-device through the requested test flow. Local Gradle on Oracle ARM still fails at AAPT2 x86 loader before code compile; GitHub Actions x86_64 is the APK build source of truth.
 
 Suggested device test flow:
 
@@ -192,7 +192,7 @@ Suggested device test flow:
 
 ## Next Useful Work
 
-1. On the installed Android APK, compare in-app Fast/Full OCR results against Termux `--ocr-mode fast` and `--ocr-mode full` on `test1.jpg`, `test2.jpg`, and `test3.jpg`.
+1. Install the next UX-polish APK and verify URL/mode persistence, disabled controls during OCR, loading text, copy button state, and clearer errors when the backend is stopped.
 2. Run `benchmark-image --runs 3 --ocr-mode fast` and `--ocr-mode full` across 3-5 real screenshots and record OCR quality notes.
 3. Decide whether the next app-level default should expose fast/full OCR choices or keep modes Termux-only.
 4. Consider adding a `/diagnostics` endpoint if direct health polling is not enough for external tools.

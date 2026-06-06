@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -27,7 +28,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -39,6 +42,9 @@ public final class MainActivity extends Activity {
   private static final int REQUEST_PICK_MODEL = 2001;
   private static final int REQUEST_PICK_OCR_IMAGE = 2002;
   private static final String DEFAULT_BACKEND_URL = "http://127.0.0.1:8765";
+  private static final String PREFS_NAME = "gemma_android_backend";
+  private static final String PREF_BACKEND_URL = "backend_url";
+  private static final String PREF_OCR_MODE = "ocr_mode";
   private static final String OCR_MODE_FAST = "fast";
   private static final String OCR_MODE_FULL = "full";
   private static final String FAST_PROMPT = "Extract visible text from this image. Return concise text.";
@@ -61,14 +67,23 @@ public final class MainActivity extends Activity {
   private TextView ocrResult;
   private EditText backendUrlInput;
   private Button startLiteRt;
+  private Button selectOcrImageButton;
+  private Button fastModeButton;
+  private Button fullModeButton;
+  private Button runOcrButton;
+  private Button copyOcrButton;
   private Uri selectedOcrImage;
   private String selectedOcrMode = OCR_MODE_FAST;
   private String lastOcrText = "";
+  private boolean ocrRunning;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     requestNotificationPermission();
+    SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+    selectedOcrMode = prefs.getString(PREF_OCR_MODE, OCR_MODE_FAST);
+    if (!OCR_MODE_FULL.equals(selectedOcrMode)) selectedOcrMode = OCR_MODE_FAST;
 
     ScrollView scroll = new ScrollView(this);
     LinearLayout layout = new LinearLayout(this);
@@ -120,42 +135,42 @@ public final class MainActivity extends Activity {
 
     backendUrlInput = new EditText(this);
     backendUrlInput.setSingleLine(true);
-    backendUrlInput.setText(DEFAULT_BACKEND_URL);
+    backendUrlInput.setText(prefs.getString(PREF_BACKEND_URL, DEFAULT_BACKEND_URL));
     layout.addView(backendUrlInput);
 
     ocrImageStatus = new TextView(this);
     ocrImageStatus.setText("OCR image: none");
     layout.addView(ocrImageStatus);
 
-    Button selectOcrImage = new Button(this);
-    selectOcrImage.setText("Select OCR Image");
-    selectOcrImage.setOnClickListener(v -> openOcrImagePicker());
-    layout.addView(selectOcrImage);
+    selectOcrImageButton = new Button(this);
+    selectOcrImageButton.setText("Select OCR Image");
+    selectOcrImageButton.setOnClickListener(v -> openOcrImagePicker());
+    layout.addView(selectOcrImageButton);
 
     LinearLayout modeRow = new LinearLayout(this);
     modeRow.setOrientation(LinearLayout.HORIZONTAL);
-    Button fastMode = new Button(this);
-    fastMode.setText("Fast OCR");
-    fastMode.setOnClickListener(v -> setOcrMode(OCR_MODE_FAST));
-    modeRow.addView(fastMode);
-    Button fullMode = new Button(this);
-    fullMode.setText("Full OCR");
-    fullMode.setOnClickListener(v -> setOcrMode(OCR_MODE_FULL));
-    modeRow.addView(fullMode);
+    fastModeButton = new Button(this);
+    fastModeButton.setText("Fast OCR");
+    fastModeButton.setOnClickListener(v -> setOcrMode(OCR_MODE_FAST));
+    modeRow.addView(fastModeButton);
+    fullModeButton = new Button(this);
+    fullModeButton.setText("Full OCR");
+    fullModeButton.setOnClickListener(v -> setOcrMode(OCR_MODE_FULL));
+    modeRow.addView(fullModeButton);
     layout.addView(modeRow);
 
     ocrModeStatus = new TextView(this);
     layout.addView(ocrModeStatus);
 
-    Button runOcr = new Button(this);
-    runOcr.setText("Run OCR");
-    runOcr.setOnClickListener(v -> runSelectedOcr());
-    layout.addView(runOcr);
+    runOcrButton = new Button(this);
+    runOcrButton.setText("Run OCR");
+    runOcrButton.setOnClickListener(v -> runSelectedOcr());
+    layout.addView(runOcrButton);
 
-    Button copyOcr = new Button(this);
-    copyOcr.setText("Copy OCR Text");
-    copyOcr.setOnClickListener(v -> copyOcrText());
-    layout.addView(copyOcr);
+    copyOcrButton = new Button(this);
+    copyOcrButton.setText("Copy OCR Text");
+    copyOcrButton.setOnClickListener(v -> copyOcrText());
+    layout.addView(copyOcrButton);
 
     ocrResult = new TextView(this);
     ocrResult.setPadding(0, 16, 0, 0);
@@ -167,6 +182,7 @@ public final class MainActivity extends Activity {
     refreshModelStatus();
     refreshDiagnosticsStatus();
     refreshOcrModeStatus();
+    setOcrRunning(false);
   }
 
   @Override
@@ -177,6 +193,7 @@ public final class MainActivity extends Activity {
 
   @Override
   protected void onPause() {
+    saveOcrPreferences();
     diagnosticsHandler.removeCallbacks(diagnosticsRefresh);
     super.onPause();
   }
@@ -254,30 +271,41 @@ public final class MainActivity extends Activity {
   }
 
   private void setOcrMode(String mode) {
-    selectedOcrMode = mode;
+    selectedOcrMode = OCR_MODE_FULL.equals(mode) ? OCR_MODE_FULL : OCR_MODE_FAST;
+    saveOcrPreferences();
     refreshOcrModeStatus();
   }
 
   private void refreshOcrModeStatus() {
-    if (OCR_MODE_FULL.equals(selectedOcrMode)) {
+    boolean full = OCR_MODE_FULL.equals(selectedOcrMode);
+    if (full) {
       ocrModeStatus.setText("OCR mode: full (original image, 768 tokens)");
     } else {
       ocrModeStatus.setText("OCR mode: fast (1280px JPEG 85, 256 tokens)");
     }
+    if (fastModeButton != null) fastModeButton.setEnabled(!ocrRunning && full);
+    if (fullModeButton != null) fullModeButton.setEnabled(!ocrRunning && !full);
   }
 
   private void runSelectedOcr() {
+    if (ocrRunning) return;
     Uri image = selectedOcrImage;
     if (image == null) {
       ocrResult.setText("Select an OCR image first.");
       return;
     }
     String backendUrl = normalizedBackendUrl();
+    saveOcrPreferences();
     OcrMode mode = OcrMode.from(selectedOcrMode);
-    ocrResult.setText("Running " + selectedOcrMode + " OCR...");
+    setOcrRunning(true);
+    ocrResult.setText("Preparing " + selectedOcrMode + " OCR..." + "\nBackend: " + backendUrl);
     copyExecutor.submit(() -> {
       try {
         OcrUpload upload = prepareOcrUpload(image, mode);
+        runOnUiThread(() -> ocrResult.setText(
+            "Running " + selectedOcrMode + " OCR..."
+                + "\nBackend: " + backendUrl
+                + "\nUpload: " + humanBytes(upload.bytes.length)));
         String raw = postGenerate(backendUrl, mode, upload);
         String text = emptyFallback(JsonUtil.stringValue(raw, "response"), "");
         int inferenceMs = JsonUtil.intValue(raw, "inference_ms", -1);
@@ -293,9 +321,13 @@ public final class MainActivity extends Activity {
                   + "\nTotal: " + totalMs + " ms"
                   + "\n\n" + text);
           refreshDiagnosticsStatus();
+          setOcrRunning(false);
         });
       } catch (Exception e) {
-        runOnUiThread(() -> ocrResult.setText("OCR failed: " + e.getMessage()));
+        runOnUiThread(() -> {
+          ocrResult.setText(userMessageForOcrError(e, backendUrl));
+          setOcrRunning(false);
+        });
       }
     });
   }
@@ -344,7 +376,7 @@ public final class MainActivity extends Activity {
     InputStream in = code >= 400 ? connection.getErrorStream() : connection.getInputStream();
     String raw = in == null ? "" : new String(readAll(in), StandardCharsets.UTF_8);
     connection.disconnect();
-    if (code >= 400) throw new IllegalStateException(raw);
+    if (code >= 400) throw new HttpStatusException(code, raw);
     return raw;
   }
 
@@ -373,7 +405,29 @@ public final class MainActivity extends Activity {
     String value = backendUrlInput.getText().toString().trim();
     if (value.isEmpty()) value = DEFAULT_BACKEND_URL;
     while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+    backendUrlInput.setText(value);
     return value;
+  }
+
+  private void saveOcrPreferences() {
+    if (backendUrlInput == null) return;
+    getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        .edit()
+        .putString(PREF_BACKEND_URL, normalizedBackendUrl())
+        .putString(PREF_OCR_MODE, selectedOcrMode)
+        .apply();
+  }
+
+  private void setOcrRunning(boolean running) {
+    ocrRunning = running;
+    if (backendUrlInput != null) backendUrlInput.setEnabled(!running);
+    if (selectOcrImageButton != null) selectOcrImageButton.setEnabled(!running);
+    if (runOcrButton != null) {
+      runOcrButton.setEnabled(!running);
+      runOcrButton.setText(running ? "OCR Running..." : "Run OCR");
+    }
+    if (copyOcrButton != null) copyOcrButton.setEnabled(!running && lastOcrText != null && !lastOcrText.isEmpty());
+    refreshOcrModeStatus();
   }
 
   private void copyOcrText() {
@@ -512,6 +566,25 @@ public final class MainActivity extends Activity {
     return (dot > 0 ? name.substring(0, dot) : name) + ".jpg";
   }
 
+  private static String userMessageForOcrError(Exception e, String backendUrl) {
+    if (e instanceof ConnectException) {
+      return "OCR failed: cannot connect to backend."
+          + "\nBackend: " + backendUrl
+          + "\nStart the LiteRT GPU server, then run OCR again.";
+    }
+    if (e instanceof SocketTimeoutException) {
+      return "OCR failed: backend timed out."
+          + "\nBackend: " + backendUrl
+          + "\nTry Fast OCR first, or restart the server if it is stuck.";
+    }
+    if (e instanceof HttpStatusException) {
+      HttpStatusException http = (HttpStatusException) e;
+      return "OCR failed: backend returned HTTP " + http.statusCode
+          + "\n" + emptyFallback(http.body, "No error body returned.");
+    }
+    return "OCR failed: " + emptyFallback(e.getMessage(), e.getClass().getSimpleName());
+  }
+
   private void requestNotificationPermission() {
     if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
       requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 10);
@@ -523,6 +596,17 @@ public final class MainActivity extends Activity {
     if (bytes >= 1024L * 1024L) return String.format(Locale.US, "%.2f MB", bytes / 1024.0 / 1024.0);
     if (bytes >= 1024L) return String.format(Locale.US, "%.2f KB", bytes / 1024.0);
     return bytes + " B";
+  }
+
+  private static final class HttpStatusException extends Exception {
+    final int statusCode;
+    final String body;
+
+    HttpStatusException(int statusCode, String body) {
+      super("HTTP " + statusCode);
+      this.statusCode = statusCode;
+      this.body = body;
+    }
   }
 
   private static final class OcrMode {
