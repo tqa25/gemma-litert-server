@@ -18,4 +18,6 @@ android {
 dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 }

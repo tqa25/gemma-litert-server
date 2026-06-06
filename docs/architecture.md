@@ -18,6 +18,8 @@ Termux CLI or Android OCR Runner
 
 The repo also contains an older JVM server skeleton for Oracle VM experiments. The Android backend is the active, device-validated runtime.
 
+The next active slice is Shizuku-backed phone automation for a Chrome Discover + Gemini summary workflow. Streaming generation is intentionally postponed.
+
 ## High-Level Runtime
 
 ```text
@@ -59,6 +61,32 @@ User
                  JSON response + diagnostics
 ```
 
+## Automation Runtime
+
+```text
+Termux automation client
+  -> http://127.0.0.1:8765/automation/*
+  -> HttpApiServer
+  -> AutomationController
+  -> ShizukuShellExecutor
+  -> Android shell commands: input, screencap, uiautomator, dumpsys, monkey
+  -> JSON response and app-private automation run files
+```
+
+The first workflow is not a general autonomous agent. It is a calibrated macro with guardrails for the user's real Chrome workflow:
+
+```text
+Chrome Discover feed already open
+  -> tap calibrated article card
+  -> wait for article page in the same Chrome tab
+  -> input keyevent --longpress KEYCODE_HOME
+  -> Gemini overlay
+  -> tap "Tóm tắt trang" / "Summarize page" by XML, fallback coordinate
+  -> tap copy by XML/content-desc, fallback coordinate
+  -> read ClipboardManager
+  -> save summary and metadata locally
+```
+
 ## Modules
 
 ### Android Backend App
@@ -75,12 +103,16 @@ Responsibilities:
 - Show latest-request diagnostics.
 - Provide an in-app OCR Runner that calls the same HTTP API.
 - Persist recent OCR results locally as text and metadata so users can revisit/copy results without running inference again.
+- Expose initial Shizuku-backed automation primitives and workflow execution over localhost HTTP.
 
 Important files:
 
 - `MainActivity.java`: UI, model picker, server controls, OCR Runner, image compression for Fast OCR, copy-to-clipboard, OCR History persistence/rendering.
 - `ServerService.java`: foreground service lifecycle, runner creation, server lifecycle.
 - `HttpApiServer.java`: `GET /health`, `POST /generate`, request parsing, benchmark logging, diagnostics updates.
+- `AutomationController.java`: automation status, stop flag, primitives, calibration config, Chrome Discover + Gemini workflow, local run storage.
+- `ShizukuShellExecutor.java`: executes shell commands through Shizuku after binder and permission checks.
+- `AutomationConfig.java`: default package/timing/coordinate config for automation.
 - `LiteRtGemmaRunner.java`: LiteRT-LM Android engine wrapper.
 - `MockGemmaRunner.java`: mock backend for request-path testing.
 - `RequestDiagnostics.java`: latest request state for UI and `/health`.
@@ -99,10 +131,13 @@ Responsibilities:
 - Optionally preprocess images with Pillow.
 - Run repeated benchmarks and summarize timing.
 - Write client-side benchmark JSONL.
+- Call automation endpoints through `automation_client.py`.
+- Save screenshots/XML returned from automation endpoints for debugging.
 
 Important files:
 
 - `client.py`: CLI implementation.
+- `automation_client.py`: CLI for `/automation/*` primitives, calibration, and workflow execution.
 - `test_client.py`: unit tests for option resolution, multipart helper, and benchmark summary.
 - `README.md`: Termux usage.
 
@@ -175,6 +210,51 @@ Legacy JSON image format remains supported:
   "temperature": 0.1
 }
 ```
+
+### Automation API
+
+Automation endpoints are local-only on the same backend port.
+
+Status and config:
+
+```text
+GET  /automation/status
+GET  /automation/config
+POST /automation/stop
+```
+
+Primitive actions:
+
+```text
+POST /automation/tap              {"x":540,"y":700}
+POST /automation/swipe            {"x1":540,"y1":1800,"x2":540,"y2":700,"duration_ms":500}
+POST /automation/home             {}
+POST /automation/back             {}
+POST /automation/longpress-home   {}
+POST /automation/wait             {"ms":1000}
+GET  /automation/current-app
+GET  /automation/screenshot
+GET  /automation/screen-xml
+POST /automation/open-app         {"package":"com.android.chrome"}
+```
+
+Calibration and workflow:
+
+```text
+POST /automation/calibrate
+  {"key":"chrome_discover_first_article","x":540,"y":700}
+
+POST /automation/workflows/run
+  {"workflow":"chrome-discover-gemini-summary-once","debug_capture":true}
+```
+
+Important MVP constraints:
+
+- Shizuku must be running and permission must be granted to the app.
+- Current workflow starts with Chrome Discover feed already visible.
+- Main package guard is `com.android.chrome`.
+- Gemini/Google package is allowed because the overlay may surface through Google app.
+- Errors should stop the workflow and capture debug files when possible.
 
 Response shape:
 
@@ -258,6 +338,28 @@ HttpApiServer.handleGenerate
   -> log benchmark row
   -> update RequestDiagnostics
   -> return JSON response
+```
+
+### Chrome Discover Gemini Summary Once
+
+```text
+automation_client.py run chrome-discover-gemini-summary-once
+  -> POST /automation/workflows/run
+  -> AutomationController loads automation_config.json
+  -> verify calibration exists
+  -> verify current package is com.android.chrome
+  -> tap chrome_discover_first_article
+  -> wait article_load_ms
+  -> verify current package is still Chrome
+  -> longpress HOME
+  -> wait gemini_open_ms
+  -> dump XML and tap "Tóm tắt trang" / "Summarize page" if visible
+  -> otherwise tap calibrated gemini_summary_button
+  -> wait gemini_summary_ms
+  -> dump XML and tap copy if visible
+  -> otherwise tap calibrated gemini_copy_button
+  -> read Android ClipboardManager
+  -> save summary.txt, metadata.json, run.json, workflow_log.jsonl
 ```
 
 ### LiteRT Runner
@@ -360,7 +462,11 @@ Android dependencies:
 ```text
 com.google.ai.edge.litertlm:litertlm-android:latest.release
 org.nanohttpd:nanohttpd:2.3.1
+dev.rikka.shizuku:api:13.1.5
+dev.rikka.shizuku:provider:13.1.5
 ```
+
+Gradle uses `android.useAndroidX=true` because Shizuku provider pulls AndroidX annotation.
 
 APK workflow:
 
@@ -385,7 +491,9 @@ Likely next architecture additions:
 - `GET /diagnostics`: dedicated diagnostics endpoint if `/health.last_request` becomes too crowded.
 - `POST /generate-stream`: SSE or chunked streaming for first-token latency.
 - OCR quality dataset/results doc: visual comparison across real screenshots.
-- Phone automation layer: later Termux/Codex/Accessibility/Shizuku integration after OCR backend stabilizes.
+- Automation hardening: replace reflection-based Shizuku shell process with a Shizuku UserService if runtime tests show reflection is blocked or unreliable.
+- Batch workflow: `chrome-discover-gemini-summary-batch` after one-article workflow is stable on device.
+- Accessibility Service: later option if XML/copy/tap reliability is insufficient through Shizuku shell alone.
 - External backend URL support: Android OCR Runner already accepts a backend URL, so it can point to another host later.
 
 ## Documentation Discipline
@@ -422,3 +530,16 @@ Stored fields:
 - OCR text
 
 Source image bytes are not stored.
+
+### Automation Runs
+
+```text
+AutomationController successful run
+  -> getFilesDir()/automation_runs/{run_id}/
+  -> run.json
+  -> workflow_log.jsonl
+  -> article_001/summary.txt
+  -> article_001/metadata.json
+```
+
+With `debug_capture=true` or on error, the run may also include screenshots, XML snapshots, and `error.json` under the article directory.

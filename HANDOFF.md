@@ -2,10 +2,16 @@
 
 ## Purpose
 
-Continue work on `gemma-litert-server`, an Android + Termux local OCR backend using Gemma 4 E4B IT LiteRT-LM on ROG Phone 6. The current pipeline is:
+Continue work on `gemma-litert-server`, an Android + Termux local OCR backend using Gemma 4 E4B IT LiteRT-LM on ROG Phone 6. OCR remains working, and the current priority has shifted to Shizuku-backed phone automation before streaming. The current OCR pipeline is:
 
 ```text
 Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma -> JSON response + timing
+```
+
+The new automation MVP pipeline is:
+
+```text
+Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku shell -> Chrome/Gemini UI -> local summary files
 ```
 
 ## Workspace
@@ -23,12 +29,16 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - Benchmark plan: `docs/benchmark-plan.md`
 - Termux test plan: `docs/termux-client-test-plan.md`
 - Termux client: `termux-bridge/client.py`
+- Termux automation client: `termux-bridge/automation_client.py`
 - Termux client tests: `termux-bridge/test_client.py`
 - Android backend entry points:
   - `android-backend/src/main/java/dev/gemma/androidbackend/MainActivity.java`
   - `android-backend/src/main/java/dev/gemma/androidbackend/ServerService.java`
   - `android-backend/src/main/java/dev/gemma/androidbackend/HttpApiServer.java`
   - `android-backend/src/main/java/dev/gemma/androidbackend/LiteRtGemmaRunner.java`
+  - `android-backend/src/main/java/dev/gemma/androidbackend/AutomationController.java`
+  - `android-backend/src/main/java/dev/gemma/androidbackend/ShizukuShellExecutor.java`
+  - `android-backend/src/main/java/dev/gemma/androidbackend/AutomationConfig.java`
 
 ## Recent Commits
 
@@ -59,6 +69,12 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - `/health` includes a `last_request` diagnostics object.
 - LiteRT GPU backend is enabled with `Backend.GPU()` for both model and vision backend.
 - CPU backend is still available from the app for comparison/debug.
+- Initial automation API exists under `/automation/*`.
+- Shizuku dependencies were added: `dev.rikka.shizuku:api:13.1.5` and `dev.rikka.shizuku:provider:13.1.5`; manifest now includes `rikka.shizuku.ShizukuProvider`.
+- `gradle.properties` now sets `android.useAndroidX=true` because Shizuku provider depends on AndroidX annotation.
+- Termux automation CLI supports status, stop, current-app, tap, swipe, home, back, longpress-home, wait, screenshot, screen-xml, open-app, calibration, and workflow run.
+- First workflow is `chrome-discover-gemini-summary-once`.
+- MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
 - Latest successful APK build:
   - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27066327222`
   - Commit: `4e33c70284f4ca3010b33a69ac6e896378044d82`
@@ -118,7 +134,62 @@ Conclusion: avoid `1600 / JPEG 90` for this screenshot class; it reduces bytes b
 
 ## Latest Completed Work
 
-Added optional Termux-side image preprocessing for upload/latency experiments:
+Latest code work added the initial Shizuku automation MVP:
+
+```text
+Android:
+  /automation/status
+  /automation/config
+  /automation/stop
+  /automation/tap
+  /automation/swipe
+  /automation/home
+  /automation/back
+  /automation/longpress-home
+  /automation/wait
+  /automation/current-app
+  /automation/screenshot
+  /automation/screen-xml
+  /automation/open-app
+  /automation/calibrate
+  /automation/workflows/run
+
+Termux:
+  termux-bridge/automation_client.py
+```
+
+The implemented workflow is intentionally narrow:
+
+```text
+chrome-discover-gemini-summary-once:
+  Chrome Discover feed already visible
+  -> tap calibrated article card
+  -> longpress HOME
+  -> tap Gemini summarize page by XML or fallback coordinate
+  -> tap copy by XML/content-desc or fallback coordinate
+  -> read ClipboardManager
+  -> save summary under app-private automation_runs
+```
+
+Verification completed:
+
+```bash
+python3 -m py_compile termux-bridge/client.py termux-bridge/test_client.py termux-bridge/automation_client.py
+python3 -m unittest termux-bridge/test_client.py
+python3 termux-bridge/automation_client.py --help
+python3 termux-bridge/automation_client.py run --help
+./gradlew :android-backend:compileDebugJavaWithJavac -x :android-backend:processDebugResources --stacktrace
+```
+
+Full local APK assemble still fails at the known Oracle ARM AAPT2 x86 loader issue:
+
+```text
+x86_64-binfmt-P: Could not open '/lib64/ld-linux-x86-64.so.2': No such file or directory
+```
+
+Use GitHub Actions for the APK build source of truth.
+
+Previous OCR work added optional Termux-side image preprocessing for upload/latency experiments:
 
 ```bash
 python3 termux-bridge/client.py generate-image \
@@ -198,12 +269,13 @@ Suggested device test flow:
 ## Next Useful Work
 
 0. In every new session, read `PROGRESS.md`, `docs/architecture.md`, and this `HANDOFF.md` before changing files. After meaningful codebase/runtime/API/build/benchmark changes, update `PROGRESS.md`; if architecture changes, update `docs/architecture.md` too.
-1. Install the next OCR History APK and verify successful OCR results are saved, survive app restart, can be tapped to restore/copy text, and can be cleared.
-2. Run `benchmark-image --runs 3 --ocr-mode fast` and `--ocr-mode full` across 3-5 real screenshots and record OCR quality notes.
-3. Decide whether the next app-level default should expose fast/full OCR choices or keep modes Termux-only.
-4. Consider adding a `/diagnostics` endpoint if direct health polling is not enough for external tools.
-5. Consider a streaming endpoint later if the workflow needs first-token latency rather than total latency.
-6. Keep `Start LiteRT CPU Server` as a debug comparator, but default future testing to `Start LiteRT GPU Server`.
+1. Build the new automation APK through GitHub Actions and install it on the ROG Phone 6.
+2. Start Shizuku on the phone, open the Android backend app once, and grant Shizuku permission when requested.
+3. Start backend server, then from Termux run `python3 termux-bridge/automation_client.py status`; verify `shizuku_available=true` and `shizuku_permission_granted=true`.
+4. With Chrome Discover feed open, test primitives: `current-app`, `screenshot`, `screen-xml`, `longpress-home`, then calibrate `chrome_discover_first_article`, `gemini_summary_button`, and `gemini_copy_button`.
+5. Run `python3 termux-bridge/automation_client.py run chrome-discover-gemini-summary-once --debug-capture` and inspect `automation_runs/{run_id}`.
+6. If Shizuku reflection shell fails at runtime, replace `ShizukuShellExecutor` with a Shizuku UserService implementation.
+7. Only after one-article workflow is stable, add batch mode and Chrome feed swipe calibration. Streaming remains postponed.
 
 ## Fresh Session Instruction
 

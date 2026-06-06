@@ -49,6 +49,18 @@ Termux CLI or Android OCR Runner
 
 The project is not yet a full phone automation agent. Voice, Accessibility, Shizuku, Codex/Antigravity integration, and streaming are future phases.
 
+Near-term priority changed on 2026-06-06: postpone `/generate-stream` and build phone automation first. The first automation MVP targets the user's real Chrome Discover workflow:
+
+```text
+Chrome new tab / Discover feed already open
+  -> tap one article in the same Chrome tab
+  -> long-press HOME through Shizuku shell to open Gemini overlay
+  -> tap Gemini "Tóm tắt trang" / "Summarize page"
+  -> tap/click Gemini copy button
+  -> Android backend reads ClipboardManager
+  -> save summary locally under automation_runs
+```
+
 ## Workspace
 
 - Repo path: `/home/ubuntu/workspaces2/projects/gemma-litert-server`
@@ -70,18 +82,25 @@ The project is not yet a full phone automation agent. Voice, Accessibility, Shiz
 - Android app stores OCR History locally in app-private `ocr_history.json`. It keeps the 20 most recent OCR results with text and metadata only, not source images.
 - Termux client supports `health`, `generate-text`, `generate-image`, and `benchmark-image`.
 - Termux image workflows support `--ocr-mode fast`, `--ocr-mode full`, and lower-level overrides.
+- Android backend now includes an initial Shizuku-backed automation API under `/automation/*`.
+- Termux now includes `termux-bridge/automation_client.py` for automation status, primitives, calibration, screenshots/XML, and the first Chrome Discover + Gemini workflow.
+- First automation workflow name: `chrome-discover-gemini-summary-once`.
 
 ## Important Files
 
 - `HANDOFF.md`: latest human/agent handoff.
 - `docs/architecture.md`: system architecture map.
 - `termux-bridge/client.py`: Termux CLI client and benchmark helper.
+- `termux-bridge/automation_client.py`: Termux CLI for Android automation API.
 - `termux-bridge/test_client.py`: unit tests for Termux image/OCR option resolution and multipart helpers.
 - `termux-bridge/README.md`: Termux setup and usage.
 - `docs/termux-client-test-plan.md`: device test plan for Termux path.
 - `android-backend/src/main/java/dev/gemma/androidbackend/MainActivity.java`: Android UI, model picker, server controls, OCR Runner, OCR History.
 - `android-backend/src/main/java/dev/gemma/androidbackend/ServerService.java`: foreground service and runner/server lifecycle.
 - `android-backend/src/main/java/dev/gemma/androidbackend/HttpApiServer.java`: NanoHTTPD API server.
+- `android-backend/src/main/java/dev/gemma/androidbackend/AutomationController.java`: automation primitives, calibration, workflow runner, local run storage.
+- `android-backend/src/main/java/dev/gemma/androidbackend/ShizukuShellExecutor.java`: Shizuku shell command adapter.
+- `android-backend/src/main/java/dev/gemma/androidbackend/AutomationConfig.java`: automation defaults and calibration shape.
 - `android-backend/src/main/java/dev/gemma/androidbackend/LiteRtGemmaRunner.java`: LiteRT-LM Android runner.
 - `.github/workflows/android-backend-apk.yml`: APK build workflow.
 - `GITHUB_ACTIONS_APK_DEBUG_RUNBOOK.md`: required debug workflow for APK build failures.
@@ -170,6 +189,12 @@ test3:
 - OCR History should save only OCR text and metadata; source images are intentionally not persisted.
 - Do not add a third `balanced` preset yet. Existing evidence is not strong enough.
 - For APK builds and failures, use the GitHub Actions workflow and the debug runbook.
+- Do not implement `/generate-stream` yet; automation is higher priority.
+- Automation MVP should start from Chrome Discover feed already open, not from Home.
+- Chrome Discover is preferred over Google News app because tapped articles open in the same Chrome tab on the user's phone, and one Back returns to the Discover feed.
+- Automation must use Shizuku first; Accessibility Service remains a later option.
+- Automation guardrails: start with package whitelist, stop/status endpoints, max run duration, calibration for fixed tap points, and stop-on-failure snapshot in debug/error paths.
+- Gemini overlay is the first summary backend; Gemma local can become a later `summary_backend` option after article extraction is reliable.
 
 ## Known Issues And Caveats
 
@@ -180,6 +205,10 @@ test3:
 - OCR History is app-local only. It is not exported, searchable, or synced.
 - `/generate-stream` and `/diagnostics` are not implemented yet.
 - The JVM server skeleton still exists, but the active validated path is the Android backend.
+- Shizuku API integration uses `dev.rikka.shizuku:api/provider:13.1.5` and requires the user to have Shizuku running and grant permission to the app.
+- Shizuku shell execution currently uses reflection against Shizuku's private `newProcess` method because API 13.1.5 no longer exposes it publicly. If runtime blocks this, replace it with a Shizuku UserService implementation.
+- Clipboard reading after Gemini copy must be validated on device; Android clipboard foreground restrictions may require adjustments.
+- Automation workflow has not yet been device-validated on ROG Phone 6.
 
 ## Verification Commands
 
@@ -190,6 +219,28 @@ python3 -m unittest termux-bridge/test_client.py
 python3 -m py_compile termux-bridge/client.py termux-bridge/test_client.py
 python3 termux-bridge/client.py generate-image --help
 python3 termux-bridge/client.py benchmark-image --help
+```
+
+Automation local checks:
+
+```bash
+python3 -m py_compile termux-bridge/automation_client.py
+python3 termux-bridge/automation_client.py --help
+python3 termux-bridge/automation_client.py run --help
+./gradlew :android-backend:compileDebugJavaWithJavac -x :android-backend:processDebugResources --stacktrace
+```
+
+Automation device commands after installing an APK built on GitHub Actions:
+
+```bash
+python3 termux-bridge/automation_client.py status
+python3 termux-bridge/automation_client.py current-app
+python3 termux-bridge/automation_client.py screenshot --output screen.png
+python3 termux-bridge/automation_client.py screen-xml --output screen.xml
+python3 termux-bridge/automation_client.py calibrate chrome_discover_first_article --x 540 --y 700
+python3 termux-bridge/automation_client.py calibrate gemini_summary_button --x 540 --y 1800
+python3 termux-bridge/automation_client.py calibrate gemini_copy_button --x 960 --y 2100
+python3 termux-bridge/automation_client.py run chrome-discover-gemini-summary-once --debug-capture
 ```
 
 Fast OCR:

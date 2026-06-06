@@ -24,6 +24,12 @@ final class JsonUtil {
     return value == null ? defaultValue : Double.parseDouble(value);
   }
 
+  static boolean booleanValue(String json, String key, boolean defaultValue) {
+    Pattern pattern = Pattern.compile("\"" + Pattern.quote(key) + "\"\\s*:\\s*(true|false)");
+    Matcher matcher = pattern.matcher(json);
+    return matcher.find() ? Boolean.parseBoolean(matcher.group(1)) : defaultValue;
+  }
+
   static String object(Map<String, ?> values) {
     StringBuilder out = new StringBuilder("{");
     Iterator<? extends Map.Entry<String, ?>> it = values.entrySet().iterator();

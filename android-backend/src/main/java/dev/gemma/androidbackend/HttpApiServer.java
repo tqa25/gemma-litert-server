@@ -14,12 +14,14 @@ import java.util.UUID;
 final class HttpApiServer extends NanoHTTPD {
   private final GemmaRunner runner;
   private final BenchmarkLogger logger;
+  private final AutomationController automation;
   private final long startedAtMs;
 
   HttpApiServer(Context context, GemmaRunner runner) {
     super(BackendConfig.HOST, BackendConfig.PORT);
     this.runner = runner;
     this.logger = new BenchmarkLogger(context);
+    this.automation = new AutomationController(context);
     this.startedAtMs = System.currentTimeMillis();
   }
 
@@ -32,11 +34,73 @@ final class HttpApiServer extends NanoHTTPD {
       if (Method.POST.equals(session.getMethod()) && "/generate".equals(session.getUri())) {
         return handleGenerate(session);
       }
+      if (session.getUri().startsWith("/automation/")) {
+        return handleAutomation(session);
+      }
       return json(Response.Status.NOT_FOUND, JsonUtil.error("not_found", "Unknown route"));
     } catch (Exception e) {
       RequestDiagnostics.recordError(runner.name(), e.getMessage());
       return json(Response.Status.BAD_REQUEST, JsonUtil.error("bad_request", e.getMessage()));
     }
+  }
+
+  private Response handleAutomation(IHTTPSession session) throws Exception {
+    String path = session.getUri();
+    Method method = session.getMethod();
+    String body = requestBody(session);
+    if (Method.GET.equals(method) && "/automation/status".equals(path)) {
+      return json(Response.Status.OK, automation.statusJson());
+    }
+    if (Method.GET.equals(method) && "/automation/config".equals(path)) {
+      return json(Response.Status.OK, automation.configJson());
+    }
+    if (Method.GET.equals(method) && "/automation/current-app".equals(path)) {
+      return json(Response.Status.OK, automation.currentAppJson());
+    }
+    if (Method.GET.equals(method) && "/automation/screenshot".equals(path)) {
+      return json(Response.Status.OK, automation.screenshotJson());
+    }
+    if (Method.GET.equals(method) && "/automation/screen-xml".equals(path)) {
+      return json(Response.Status.OK, automation.screenXmlJson());
+    }
+    if (Method.POST.equals(method) && "/automation/stop".equals(path)) {
+      return json(Response.Status.OK, automation.stopJson());
+    }
+    if (Method.POST.equals(method) && "/automation/tap".equals(path)) {
+      return json(Response.Status.OK, automation.tapJson(body));
+    }
+    if (Method.POST.equals(method) && "/automation/swipe".equals(path)) {
+      return json(Response.Status.OK, automation.swipeJson(body));
+    }
+    if (Method.POST.equals(method) && "/automation/home".equals(path)) {
+      return json(Response.Status.OK, automation.keyJson("home", "input keyevent KEYCODE_HOME"));
+    }
+    if (Method.POST.equals(method) && "/automation/back".equals(path)) {
+      return json(Response.Status.OK, automation.keyJson("back", "input keyevent KEYCODE_BACK"));
+    }
+    if (Method.POST.equals(method) && "/automation/longpress-home".equals(path)) {
+      return json(Response.Status.OK, automation.keyJson("longpress-home", "input keyevent --longpress KEYCODE_HOME"));
+    }
+    if (Method.POST.equals(method) && "/automation/wait".equals(path)) {
+      return json(Response.Status.OK, automation.waitJson(body));
+    }
+    if (Method.POST.equals(method) && "/automation/open-app".equals(path)) {
+      return json(Response.Status.OK, automation.openAppJson(body));
+    }
+    if (Method.POST.equals(method) && "/automation/calibrate".equals(path)) {
+      return json(Response.Status.OK, automation.calibrateJson(body));
+    }
+    if (Method.POST.equals(method) && "/automation/workflows/run".equals(path)) {
+      return json(Response.Status.OK, automation.runWorkflowJson(body));
+    }
+    return json(Response.Status.NOT_FOUND, JsonUtil.error("not_found", "Unknown automation route"));
+  }
+
+  private static String requestBody(IHTTPSession session) throws Exception {
+    Map<String, String> files = new java.util.HashMap<>();
+    session.parseBody(files);
+    String body = files.get("postData");
+    return body == null ? "" : body;
   }
 
   private String healthJson() {
