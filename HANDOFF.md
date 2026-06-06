@@ -30,6 +30,7 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 
 ## Recent Commits
 
+- `d695340` Polish Android OCR runner UX
 - `84ee76f` Add Android OCR runner UI
 - `121f12a` Add Android request diagnostics and image benchmark helper
 - `6bfb9a8` Update handoff with benchmark checkpoint
@@ -55,10 +56,10 @@ Termux CLI -> localhost HTTP -> Android foreground backend -> LiteRT-LM Gemma ->
 - LiteRT GPU backend is enabled with `Backend.GPU()` for both model and vision backend.
 - CPU backend is still available from the app for comparison/debug.
 - Latest successful APK build:
-  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27062255260`
-  - Commit: `84ee76fbfd8e17ee307d375921e2afc5176a6bc8`
+  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27063108323`
+  - Commit: `d695340d6da234ae91e072f1ff9353d3e6171a3d`
   - Artifact: `gemma-android-backend-debug-apk`
-  - APK verified locally at download time: `/tmp/apk-artifact-27062255260/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26046870 bytes`
+  - APK verified locally at download time: `/tmp/apk-artifact-27063108323/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26048350 bytes`
 
 ## Latest Device Results
 
