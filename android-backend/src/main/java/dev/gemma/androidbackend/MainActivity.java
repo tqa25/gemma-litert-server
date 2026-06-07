@@ -64,12 +64,14 @@ public final class MainActivity extends Activity {
     @Override
     public void run() {
       refreshDiagnosticsStatus();
+      refreshAutomationLog();
       diagnosticsHandler.postDelayed(this, 1000L);
     }
   };
   private TextView status;
   private TextView modelStatus;
   private TextView diagnosticsStatus;
+  private TextView automationLogView;
   private TextView ocrImageStatus;
   private TextView ocrModeStatus;
   private TextView ocrResult;
@@ -157,6 +159,30 @@ public final class MainActivity extends Activity {
     hideOverlay.setText("Hide Floating Automation Controls");
     hideOverlay.setOnClickListener(v -> hideFloatingAutomation());
     layout.addView(hideOverlay);
+
+    TextView automationLogTitle = new TextView(this);
+    automationLogTitle.setPadding(0, 24, 0, 8);
+    automationLogTitle.setText("Automation Log");
+    layout.addView(automationLogTitle);
+
+    Button copyAutomationLog = new Button(this);
+    copyAutomationLog.setText("Copy Automation Log");
+    copyAutomationLog.setOnClickListener(v -> copyAutomationLog());
+    layout.addView(copyAutomationLog);
+
+    Button clearAutomationLog = new Button(this);
+    clearAutomationLog.setText("Clear Automation Log");
+    clearAutomationLog.setOnClickListener(v -> {
+      AutomationLog.clear();
+      refreshAutomationLog();
+      status.setText("Automation log cleared.");
+    });
+    layout.addView(clearAutomationLog);
+
+    automationLogView = new TextView(this);
+    automationLogView.setTextIsSelectable(true);
+    automationLogView.setText("No automation log yet.");
+    layout.addView(automationLogView);
 
     TextView ocrTitle = new TextView(this);
     ocrTitle.setPadding(0, 32, 0, 8);
@@ -701,12 +727,27 @@ public final class MainActivity extends Activity {
       return;
     }
     startService(new Intent(this, FloatingAutomationService.class));
+    AutomationLog.add("ui", "show floating automation controls");
     status.setText("Floating automation controls shown.");
   }
 
   private void hideFloatingAutomation() {
     stopService(new Intent(this, FloatingAutomationService.class));
+    AutomationLog.add("ui", "hide floating automation controls");
     status.setText("Floating automation controls hidden.");
+  }
+
+  private void refreshAutomationLog() {
+    if (automationLogView == null) return;
+    String text = AutomationLog.text();
+    automationLogView.setText(text.isEmpty() ? "No automation log yet." : text);
+  }
+
+  private void copyAutomationLog() {
+    String text = AutomationLog.text();
+    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+    clipboard.setPrimaryClip(ClipData.newPlainText("Automation log", text));
+    status.setText("Automation log copied to clipboard.");
   }
 
   private void refreshDiagnosticsStatus() {

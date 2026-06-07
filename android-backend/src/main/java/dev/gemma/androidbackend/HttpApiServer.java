@@ -54,6 +54,12 @@ final class HttpApiServer extends NanoHTTPD {
     if (Method.GET.equals(method) && "/automation/config".equals(path)) {
       return json(Response.Status.OK, automation.configJson());
     }
+    if (Method.GET.equals(method) && "/automation/logs".equals(path)) {
+      LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+      result.put("ok", true);
+      result.put("logs", AutomationLog.text());
+      return json(Response.Status.OK, JsonUtil.object(result));
+    }
     if (Method.GET.equals(method) && "/automation/current-app".equals(path)) {
       return json(Response.Status.OK, automation.currentAppJson());
     }
@@ -65,6 +71,10 @@ final class HttpApiServer extends NanoHTTPD {
     }
     if (Method.POST.equals(method) && "/automation/stop".equals(path)) {
       return json(Response.Status.OK, automation.stopJson());
+    }
+    if (Method.POST.equals(method) && "/automation/logs/clear".equals(path)) {
+      AutomationLog.clear();
+      return json(Response.Status.OK, "{\"ok\":true}");
     }
     if (Method.POST.equals(method) && "/automation/tap".equals(path)) {
       return json(Response.Status.OK, automation.tapJson(body));

@@ -45,6 +45,7 @@ final class AutomationController {
 
   String stopJson() {
     stopRequested = true;
+    AutomationLog.add("automation", "stop requested");
     LinkedHashMap<String, Object> result = base("stop");
     result.put("stop_requested", true);
     return JsonUtil.object(result);
@@ -81,6 +82,7 @@ final class AutomationController {
       throw new IllegalArgumentException("unknown calibration key: " + key);
     }
     saveConfig(config);
+    AutomationLog.add("calibrate", key + " = " + x + "," + y);
     LinkedHashMap<String, Object> result = base("calibrate");
     result.put("key", key);
     result.put("x", x);
@@ -94,6 +96,7 @@ final class AutomationController {
     int y = JsonUtil.intValue(body, "y", -1);
     if (x < 1 || y < 1) throw new IllegalArgumentException("x and y must be positive");
     AutomationShellResult shellResult = shell.runChecked("input tap " + x + " " + y, 10000);
+    AutomationLog.add("tap", x + "," + y + " duration_ms=" + shellResult.durationMs);
     LinkedHashMap<String, Object> result = base("tap");
     result.put("duration_ms", shellResult.durationMs);
     result.put("x", x);
@@ -111,6 +114,7 @@ final class AutomationController {
     AutomationShellResult shellResult = shell.runChecked(
         "input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + duration,
         15000);
+    AutomationLog.add("swipe", x1 + "," + y1 + " -> " + x2 + "," + y2 + " duration=" + duration);
     LinkedHashMap<String, Object> result = base("swipe");
     result.put("duration_ms", shellResult.durationMs);
     return JsonUtil.object(result);
@@ -118,6 +122,7 @@ final class AutomationController {
 
   String keyJson(String action, String keyCommand) throws Exception {
     AutomationShellResult shellResult = shell.runChecked(keyCommand, 10000);
+    AutomationLog.add(action, keyCommand + " duration_ms=" + shellResult.durationMs);
     LinkedHashMap<String, Object> result = base(action);
     result.put("duration_ms", shellResult.durationMs);
     return JsonUtil.object(result);
@@ -170,6 +175,7 @@ final class AutomationController {
   String runWorkflowJson(String body) throws Exception {
     String workflow = requireString(body, "workflow");
     boolean debugCapture = JsonUtil.booleanValue(body, "debug_capture", false);
+    AutomationLog.add("workflow", "requested " + workflow + " debug_capture=" + debugCapture);
     if (AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE.equals(workflow)) {
       return runChromeDiscoverReadingGemmaOnce(debugCapture);
     }
@@ -195,35 +201,55 @@ final class AutomationController {
     }
     long started = System.currentTimeMillis();
     try {
+      AutomationLog.clear();
+      AutomationLog.add("reading", "start run_id=" + runId);
+      AutomationLog.add("reading", "coords article=" + config.chromeDiscoverArticleX + "," + config.chromeDiscoverArticleY
+          + " menu=" + config.chromeMenuButtonX + "," + config.chromeMenuButtonY
+          + " reading=" + config.chromeShowReadingModeX + "," + config.chromeShowReadingModeY);
       appendLog(runDir, "start", "reading workflow started");
       ensureAllowedChrome();
+      AutomationLog.add("reading", "current package before article=" + currentPackage());
       if (debugCapture) capture(articleDir, "feed");
       checkRun(started, config);
       shell.runChecked("input tap " + config.chromeDiscoverArticleX + " " + config.chromeDiscoverArticleY, 10000);
+      AutomationLog.add("reading", "tap article");
       appendLog(runDir, "tap_article", "tapped Chrome Discover article");
       Thread.sleep(config.articleLoadMs);
       ensureAllowedChrome();
+      AutomationLog.add("reading", "current package after article=" + currentPackage());
       if (debugCapture) capture(articleDir, "article_page");
       checkRun(started, config);
       shell.runChecked("input tap " + config.chromeMenuButtonX + " " + config.chromeMenuButtonY, 10000);
+      AutomationLog.add("reading", "tap chrome menu at " + config.chromeMenuButtonX + "," + config.chromeMenuButtonY);
       appendLog(runDir, "tap_chrome_menu", "tapped Chrome menu");
       Thread.sleep(config.chromeMenuOpenMs);
+      String menuXml = safeScreenXml();
+      AutomationLog.add("reading", "chrome menu xml_chars=" + menuXml.length());
       if (debugCapture) capture(articleDir, "chrome_menu");
       shell.runChecked("input tap " + config.chromeShowReadingModeX + " " + config.chromeShowReadingModeY, 10000);
+      AutomationLog.add("reading", "tap Show Reading mode at " + config.chromeShowReadingModeX + "," + config.chromeShowReadingModeY);
       appendLog(runDir, "tap_reading_mode", "tapped Show Reading mode");
       Thread.sleep(config.readingModeLoadMs);
       ensureAllowedChrome();
+      String readingXml = safeScreenXml();
+      AutomationLog.add("reading", "after reading tap xml_chars=" + readingXml.length() + " text_chars=" + extractedTextChars(readingXml));
+      if (extractedTextChars(readingXml) < 200) {
+        throw new IllegalStateException("Reading Mode did not appear or exposed too little text after tap; check chrome_menu_button/chrome_show_reading_mode calibration");
+      }
       if (debugCapture) capture(articleDir, "reading_mode");
       String rawText = collectReadingText(config, started, runDir);
+      AutomationLog.add("reading", "raw_text_chars=" + rawText.length());
       if (rawText.trim().length() < config.readingTextMinChars) {
         throw new IllegalStateException("reading mode text too short: " + rawText.trim().length() + " chars");
       }
       writeText(new File(articleDir, "raw_text.txt"), rawText);
       GenerationResult summary = runner.generate(new GenerationRequest(summaryPrompt(rawText), null, 512, 0.2d));
+      AutomationLog.add("reading", "summary_chars=" + summary.response.length() + " inference_ms=" + summary.inferenceMs);
       writeText(new File(articleDir, "summary.txt"), summary.response);
       writeText(new File(articleDir, "metadata.json"), readingMetadataJson(runId, rawText, summary, debugCapture, started));
       writeText(new File(runDir, "run.json"), readingRunJson(runId, "success", "", started));
       appendLog(runDir, "saved", "reading summary saved");
+      AutomationLog.add("reading", "saved run_dir=" + runDir.getAbsolutePath());
       LinkedHashMap<String, Object> result = base("run-workflow");
       result.put("run_id", runId);
       result.put("workflow", AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE);
@@ -234,6 +260,7 @@ final class AutomationController {
       return JsonUtil.object(result);
     } catch (Exception e) {
       lastError = e.getMessage();
+      AutomationLog.add("reading", "error: " + e.getMessage());
       safeErrorCapture(articleDir, e);
       writeText(new File(runDir, "run.json"), readingRunJson(runId, "error", e.getMessage(), started));
       appendLog(runDir, "error", e.getMessage());
@@ -387,9 +414,12 @@ final class AutomationController {
       checkRun(started, config);
       String xml = safeScreenXml();
       addXmlTexts(xml, lines);
-      appendLog(runDir, "extract_text", "scroll=" + index + " chars=" + joinedText(lines).length());
+      int chars = joinedText(lines).length();
+      appendLog(runDir, "extract_text", "scroll=" + index + " chars=" + chars);
+      AutomationLog.add("reading", "extract scroll=" + index + " xml_chars=" + xml.length() + " text_chars=" + chars);
       if (index < config.readingTextMaxScrolls) {
         shell.runChecked("input swipe 540 1850 540 700 500", 15000);
+        AutomationLog.add("reading", "swipe reading text");
         Thread.sleep(700);
       }
     }
@@ -402,6 +432,12 @@ final class AutomationController {
       String text = xmlUnescape(matcher.group(1)).replaceAll("\\s+", " ").trim();
       if (text.length() >= 20 && !looksLikeChromeUi(text)) lines.add(text);
     }
+  }
+
+  private static int extractedTextChars(String xml) {
+    LinkedHashSet<String> lines = new LinkedHashSet<>();
+    addXmlTexts(xml, lines);
+    return joinedText(lines).length();
   }
 
   private static boolean looksLikeChromeUi(String text) {

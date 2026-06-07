@@ -228,6 +228,8 @@ test3:
 - ROG Phone 6 device checkpoint after APK run `27081096555`: Shizuku became available, permission prompt was granted after first shell action, and primitives passed for `current-app`, `screenshot --output screen.png`, and `screen-xml --output screen.xml`.
 - Floating overlay requires Android "Display over other apps" permission. The app exposes buttons to open overlay permission settings and show/hide floating automation controls.
 - Floating overlay crosshair is now a small independent `+` target with separate Save/Cancel controls, so it can be moved to screen edges such as Chrome's `...` button.
+- Android app now has an Automation Log terminal with Copy/Clear buttons. Automation logs are also exposed through `GET /automation/logs` and `POST /automation/logs/clear`.
+- Reading workflow now logs every major step and stops early if tapping `Show Reading mode` does not expose enough text, instead of blindly scrolling the article page.
 
 ## Verification Commands
 
@@ -308,6 +310,8 @@ Automation device commands after installing an APK built on GitHub Actions:
 
 ```bash
 python3 termux-bridge/automation_client.py status
+python3 termux-bridge/automation_client.py logs
+python3 termux-bridge/automation_client.py clear-logs
 python3 termux-bridge/automation_client.py current-app
 python3 termux-bridge/automation_client.py screenshot --output screen.png
 python3 termux-bridge/automation_client.py screen-xml --output screen.xml

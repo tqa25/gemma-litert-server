@@ -245,7 +245,9 @@ Status and config:
 ```text
 GET  /automation/status
 GET  /automation/config
+GET  /automation/logs
 POST /automation/stop
+POST /automation/logs/clear
 ```
 
 Primitive actions:

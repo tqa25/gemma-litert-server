@@ -20,6 +20,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("status")
     sub.add_parser("stop")
     sub.add_parser("config")
+    sub.add_parser("logs")
+    sub.add_parser("clear-logs")
     sub.add_parser("current-app")
 
     tap = sub.add_parser("tap")
@@ -94,6 +96,10 @@ def dispatch(args: argparse.Namespace) -> dict | None:
         return call_json("GET", f"{base}/automation/status")
     if args.command == "config":
         return call_json("GET", f"{base}/automation/config")
+    if args.command == "logs":
+        return call_json("GET", f"{base}/automation/logs")
+    if args.command == "clear-logs":
+        return call_json("POST", f"{base}/automation/logs/clear", {})
     if args.command == "current-app":
         return call_json("GET", f"{base}/automation/current-app")
     if args.command == "stop":

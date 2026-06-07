@@ -83,6 +83,7 @@ public final class FloatingAutomationService extends Service {
   }
 
   private void showMenu() {
+    AutomationLog.add("overlay", "open menu");
     LinearLayout layout = new LinearLayout(this);
     layout.setOrientation(LinearLayout.VERTICAL);
     layout.setPadding(12, 12, 12, 12);
@@ -121,6 +122,7 @@ public final class FloatingAutomationService extends Service {
   }
 
   private void showCrosshair(String key) {
+    AutomationLog.add("overlay", "mark " + key);
     removeView(menu);
     menu = null;
     removeView(crosshair);
@@ -167,6 +169,7 @@ public final class FloatingAutomationService extends Service {
     int x = params.x + crosshair.getWidth() / 2;
     int y = params.y + crosshair.getHeight() / 2;
     String body = "{\"key\":\"" + key + "\",\"x\":" + x + ",\"y\":" + y + "}";
+    AutomationLog.add("overlay", "save " + key + " = " + x + "," + y);
     runHttp("calibrate", () -> post("/automation/calibrate", body));
     removeView(crosshair);
     removeView(crosshairControls);
@@ -212,12 +215,15 @@ public final class FloatingAutomationService extends Service {
   }
 
   private void runHttp(String label, HttpAction action) {
+    AutomationLog.add("overlay", "run " + label);
     executor.submit(() -> {
       try {
         String response = action.run();
+        AutomationLog.add("overlay", label + " ok");
         toast(label + " ok");
         android.util.Log.i("GemmaAutomationOverlay", label + ": " + response);
       } catch (Exception e) {
+        AutomationLog.add("overlay", label + " failed: " + e.getMessage());
         toast(label + " failed: " + e.getMessage());
       }
     });
