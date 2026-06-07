@@ -2,6 +2,9 @@ package dev.gemma.androidbackend;
 
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.IBinder;
@@ -135,12 +138,7 @@ public final class FloatingAutomationService extends Service {
     menu = null;
     removeView(crosshair);
     removeView(crosshairControls);
-    TextView target = new TextView(this);
-    target.setText("●");
-    target.setTextColor(0xffffd400);
-    target.setGravity(Gravity.CENTER);
-    target.setTextSize(42f);
-    target.setBackgroundColor(0x33000000);
+    View target = new DotView(this, true);
     WindowManager.LayoutParams params = overlayParams(88, 88);
     params.x = 504;
     params.y = 900;
@@ -174,13 +172,8 @@ public final class FloatingAutomationService extends Service {
   private void showTapIndicator(int x, int y) {
     if (x < 0 || y < 0) return;
     removeView(tapIndicator);
-    TextView dot = new TextView(this);
-    dot.setText("●");
-    dot.setTextColor(0xffffd400);
-    dot.setGravity(Gravity.CENTER);
-    dot.setTextSize(48f);
-    dot.setBackgroundColor(0x00000000);
-    WindowManager.LayoutParams params = overlayParams(96, 96);
+    View dot = new DotView(this, false);
+    WindowManager.LayoutParams params = overlayParams(96, 96, true);
     params.x = x - 48;
     params.y = y - 48;
     tapIndicator = dot;
@@ -229,14 +222,20 @@ public final class FloatingAutomationService extends Service {
   }
 
   private WindowManager.LayoutParams overlayParams(int width, int height) {
+    return overlayParams(width, height, false);
+  }
+
+  private WindowManager.LayoutParams overlayParams(int width, int height, boolean notTouchable) {
     int type = Build.VERSION.SDK_INT >= 26
         ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         : WindowManager.LayoutParams.TYPE_PHONE;
+    int flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+    if (notTouchable) flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
     WindowManager.LayoutParams params = new WindowManager.LayoutParams(
         width,
         height,
         type,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        flags,
         PixelFormat.TRANSLUCENT);
     params.gravity = Gravity.TOP | Gravity.START;
     return params;
@@ -312,5 +311,30 @@ public final class FloatingAutomationService extends Service {
 
   private interface HttpAction {
     String run() throws Exception;
+  }
+
+  private static final class DotView extends View {
+    private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint boxPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final boolean showBox;
+
+    DotView(android.content.Context context, boolean showBox) {
+      super(context);
+      this.showBox = showBox;
+      dotPaint.setColor(Color.rgb(255, 212, 0));
+      boxPaint.setColor(0x33000000);
+      setWillNotDraw(false);
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+      super.onDraw(canvas);
+      float cx = getWidth() / 2f;
+      float cy = getHeight() / 2f;
+      if (showBox) {
+        canvas.drawRect(0, 0, getWidth(), getHeight(), boxPaint);
+      }
+      canvas.drawCircle(cx, cy, Math.min(getWidth(), getHeight()) * 0.22f, dotPaint);
+    }
   }
 }

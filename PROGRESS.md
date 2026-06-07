@@ -232,6 +232,7 @@ test3:
 - Reading workflow now logs every major step and stops early if tapping `Show Reading mode` does not expose enough text, instead of blindly scrolling the article page.
 - Automation Log is shown in a fixed-height scroll box and Copy Automation Log copies the full in-memory session log.
 - Calibration and auto-running taps use a visible yellow dot centered on the actual tap coordinate.
+- Tap indicator overlay is non-touchable so it does not block the underlying `input tap`; yellow dots are drawn with a custom centered view instead of text glyphs.
 
 ## Verification Commands
 

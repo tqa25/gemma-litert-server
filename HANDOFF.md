@@ -80,6 +80,7 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - Reading workflow now logs each tap/check/scroll and stops early if `Show Reading mode` does not expose enough XML text after the calibrated tap.
 - Automation Log is displayed in a fixed-height scroll box to avoid the full app jumping while logs update.
 - Calibration target and auto-running tap indicator use a yellow dot centered on the exact tap coordinate.
+- Tap indicator overlay is non-touchable, fixing the case where the yellow dot appeared at the right coordinate but intercepted the actual `input tap`.
 - Preferred reusable workflow is `chrome-discover-reading-gemma-summary-once`.
 - Fallback Gemini overlay workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
