@@ -130,6 +130,17 @@ APK size: 26088578 bytes
 
 This APK includes the initial Shizuku automation API and `chrome-discover-gemini-summary-once` workflow. User previously confirmed the Android OCR Runner UI worked on-device through the requested test flow; automation still needs ROG Phone 6 device validation.
 
+Superseding Shizuku shell wait fix APK:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27081096555
+Commit: b2bdef2
+Artifact: gemma-android-backend-debug-apk
+APK size: 26088786 bytes
+Reason: fixes ShizukuRemoteProcess wait/exit handling after device error "process hasn't exited".
+```
+
 ## Device Results So Far
 
 Device: ROG Phone 6.
@@ -206,7 +217,7 @@ test3:
 - `/generate-stream` and `/diagnostics` are not implemented yet.
 - The JVM server skeleton still exists, but the active validated path is the Android backend.
 - Shizuku API integration uses `dev.rikka.shizuku:api/provider:13.1.5` and requires the user to have Shizuku running and grant permission to the app.
-- Shizuku shell execution currently uses reflection against Shizuku's private `newProcess` method because API 13.1.5 no longer exposes it publicly. If runtime blocks this, replace it with a Shizuku UserService implementation.
+- Shizuku shell execution currently uses reflection against Shizuku's private `newProcess` method because API 13.1.5 no longer exposes it publicly. It now waits through ShizukuRemoteProcess `waitForTimeout` when available. If runtime still blocks this, replace it with a Shizuku UserService implementation.
 - Clipboard reading after Gemini copy must be validated on device; Android clipboard foreground restrictions may require adjustments.
 - Automation workflow has not yet been device-validated on ROG Phone 6.
 
@@ -239,6 +250,17 @@ Commit: 90d798a883da4dcd4b70b7b66c44fc3cdbe90130
 Artifact: gemma-android-backend-debug-apk
 Downloaded APK: /tmp/apk-artifact-27071567879/gemma-android-backend-debug-apk/android-backend-debug.apk
 APK size: 26088578 bytes
+```
+
+Latest Shizuku wait fix APK:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27081096555
+Commit: b2bdef2
+Artifact: gemma-android-backend-debug-apk
+Downloaded APK: /tmp/apk-artifact-27081096555/gemma-android-backend-debug-apk/android-backend-debug.apk
+APK size: 26088786 bytes
 ```
 
 Automation device commands after installing an APK built on GitHub Actions:

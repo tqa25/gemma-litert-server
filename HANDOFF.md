@@ -76,10 +76,10 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - First workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
 - Latest successful APK build:
-  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27071567879`
-  - Commit: `90d798a883da4dcd4b70b7b66c44fc3cdbe90130`
+  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27081096555`
+  - Commit: `b2bdef2`
   - Artifact: `gemma-android-backend-debug-apk`
-  - APK verified locally at download time: `/tmp/apk-artifact-27071567879/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26088578 bytes`
+  - APK verified locally at download time: `/tmp/apk-artifact-27081096555/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26088786 bytes`
 
 ## Latest Device Results
 
@@ -193,13 +193,15 @@ GitHub Actions verification for this automation APK passed:
 
 ```text
 Workflow: Android Backend APK
-Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27071567879
-Commit: 90d798a883da4dcd4b70b7b66c44fc3cdbe90130
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27081096555
+Commit: b2bdef2
 Conclusion: success
 Artifact: gemma-android-backend-debug-apk
-Downloaded APK: /tmp/apk-artifact-27071567879/gemma-android-backend-debug-apk/android-backend-debug.apk
-APK size: 26088578 bytes
+Downloaded APK: /tmp/apk-artifact-27081096555/gemma-android-backend-debug-apk/android-backend-debug.apk
+APK size: 26088786 bytes
 ```
+
+Device debug note: user reached `shizuku_available=true` and `shizuku_permission_granted=true`, but primitive commands failed with `{"message":"process hasn't exited"}`. Commit `b2bdef2` changes `ShizukuShellExecutor` to wait through ShizukuRemoteProcess `waitForTimeout` and then read the exit code via `waitFor()`.
 
 Previous OCR work added optional Termux-side image preprocessing for upload/latency experiments:
 
