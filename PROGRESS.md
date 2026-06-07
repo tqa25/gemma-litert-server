@@ -331,6 +331,17 @@ Downloaded APK: /tmp/apk-artifact-27082864179/gemma-android-backend-debug-apk/an
 APK size: 26101398 bytes
 ```
 
+Latest non-touchable tap indicator APK:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27083205526
+Commit: 5daa6c5
+Artifact: gemma-android-backend-debug-apk
+Downloaded APK: /tmp/apk-artifact-27083205526/gemma-android-backend-debug-apk/android-backend-debug.apk
+APK size: 26102034 bytes
+```
+
 Automation device commands after installing an APK built on GitHub Actions:
 
 ```bash
