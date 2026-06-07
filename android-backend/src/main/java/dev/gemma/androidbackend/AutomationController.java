@@ -3,6 +3,7 @@ package dev.gemma.androidbackend;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
 import android.util.Base64;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -95,7 +96,7 @@ final class AutomationController {
     int x = JsonUtil.intValue(body, "x", -1);
     int y = JsonUtil.intValue(body, "y", -1);
     if (x < 1 || y < 1) throw new IllegalArgumentException("x and y must be positive");
-    AutomationShellResult shellResult = shell.runChecked("input tap " + x + " " + y, 10000);
+    AutomationShellResult shellResult = tap(x, y);
     AutomationLog.add("tap", x + "," + y + " duration_ms=" + shellResult.durationMs);
     LinkedHashMap<String, Object> result = base("tap");
     result.put("duration_ms", shellResult.durationMs);
@@ -211,7 +212,7 @@ final class AutomationController {
       AutomationLog.add("reading", "current package before article=" + currentPackage());
       if (debugCapture) capture(articleDir, "feed");
       checkRun(started, config);
-      shell.runChecked("input tap " + config.chromeDiscoverArticleX + " " + config.chromeDiscoverArticleY, 10000);
+      tap(config.chromeDiscoverArticleX, config.chromeDiscoverArticleY);
       AutomationLog.add("reading", "tap article");
       appendLog(runDir, "tap_article", "tapped Chrome Discover article");
       Thread.sleep(config.articleLoadMs);
@@ -219,14 +220,14 @@ final class AutomationController {
       AutomationLog.add("reading", "current package after article=" + currentPackage());
       if (debugCapture) capture(articleDir, "article_page");
       checkRun(started, config);
-      shell.runChecked("input tap " + config.chromeMenuButtonX + " " + config.chromeMenuButtonY, 10000);
+      tap(config.chromeMenuButtonX, config.chromeMenuButtonY);
       AutomationLog.add("reading", "tap chrome menu at " + config.chromeMenuButtonX + "," + config.chromeMenuButtonY);
       appendLog(runDir, "tap_chrome_menu", "tapped Chrome menu");
       Thread.sleep(config.chromeMenuOpenMs);
       String menuXml = safeScreenXml();
       AutomationLog.add("reading", "chrome menu xml_chars=" + menuXml.length());
       if (debugCapture) capture(articleDir, "chrome_menu");
-      shell.runChecked("input tap " + config.chromeShowReadingModeX + " " + config.chromeShowReadingModeY, 10000);
+      tap(config.chromeShowReadingModeX, config.chromeShowReadingModeY);
       AutomationLog.add("reading", "tap Show Reading mode at " + config.chromeShowReadingModeX + "," + config.chromeShowReadingModeY);
       appendLog(runDir, "tap_reading_mode", "tapped Show Reading mode");
       Thread.sleep(config.readingModeLoadMs);
@@ -292,7 +293,7 @@ final class AutomationController {
       ensureAllowedChrome();
       if (debugCapture) capture(articleDir, "feed");
       checkRun(started, config);
-      shell.runChecked("input tap " + config.chromeDiscoverArticleX + " " + config.chromeDiscoverArticleY, 10000);
+      tap(config.chromeDiscoverArticleX, config.chromeDiscoverArticleY);
       appendLog(runDir, "tap_article", "tapped Chrome Discover article");
       Thread.sleep(config.articleLoadMs);
       ensureAllowedChrome();
@@ -304,7 +305,7 @@ final class AutomationController {
       if (debugCapture) capture(articleDir, "gemini_before_summary");
       String geminiXml = safeScreenXml();
       if (!tapXmlText(geminiXml, "Tóm tắt trang") && !tapXmlText(geminiXml, "Summarize page")) {
-        shell.runChecked("input tap " + config.geminiSummaryButtonX + " " + config.geminiSummaryButtonY, 10000);
+        tap(config.geminiSummaryButtonX, config.geminiSummaryButtonY);
         appendLog(runDir, "tap_summary_fallback", "tapped calibrated Gemini summary button");
       } else {
         appendLog(runDir, "tap_summary_xml", "tapped Gemini summary XML node");
@@ -313,7 +314,7 @@ final class AutomationController {
       if (debugCapture) capture(articleDir, "gemini_summary");
       String copyXml = safeScreenXml();
       if (!tapXmlContent(copyXml, "Copy") && !tapXmlContent(copyXml, "Sao chép")) {
-        shell.runChecked("input tap " + config.geminiCopyButtonX + " " + config.geminiCopyButtonY, 10000);
+        tap(config.geminiCopyButtonX, config.geminiCopyButtonY);
         appendLog(runDir, "tap_copy_fallback", "tapped calibrated copy button");
       } else {
         appendLog(runDir, "tap_copy_xml", "tapped copy XML node");
@@ -363,7 +364,7 @@ final class AutomationController {
   private boolean tapXmlText(String xml, String text) throws Exception {
     int[] bounds = findBounds(xml, "text", text);
     if (bounds == null) return false;
-    shell.runChecked("input tap " + center(bounds[0], bounds[2]) + " " + center(bounds[1], bounds[3]), 10000);
+    tap(center(bounds[0], bounds[2]), center(bounds[1], bounds[3]));
     return true;
   }
 
@@ -371,8 +372,26 @@ final class AutomationController {
     int[] bounds = findBounds(xml, "content-desc", text);
     if (bounds == null) bounds = findBounds(xml, "text", text);
     if (bounds == null) return false;
-    shell.runChecked("input tap " + center(bounds[0], bounds[2]) + " " + center(bounds[1], bounds[3]), 10000);
+    tap(center(bounds[0], bounds[2]), center(bounds[1], bounds[3]));
     return true;
+  }
+
+  private AutomationShellResult tap(int x, int y) throws Exception {
+    showTapIndicator(x, y);
+    AutomationLog.add("tap", x + "," + y);
+    return shell.runChecked("input tap " + x + " " + y, 10000);
+  }
+
+  private void showTapIndicator(int x, int y) {
+    try {
+      Intent intent = new Intent(context, FloatingAutomationService.class);
+      intent.setAction(FloatingAutomationService.ACTION_SHOW_TAP);
+      intent.putExtra(FloatingAutomationService.EXTRA_X, x);
+      intent.putExtra(FloatingAutomationService.EXTRA_Y, y);
+      context.startService(intent);
+    } catch (Exception ignored) {
+      // The tap itself should still run if overlay permission is missing or the service cannot start.
+    }
   }
 
   private static int center(int a, int b) {

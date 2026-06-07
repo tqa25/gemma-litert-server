@@ -72,6 +72,8 @@ public final class MainActivity extends Activity {
   private TextView modelStatus;
   private TextView diagnosticsStatus;
   private TextView automationLogView;
+  private ScrollView automationLogScroll;
+  private String lastAutomationLogText = "";
   private TextView ocrImageStatus;
   private TextView ocrModeStatus;
   private TextView ocrResult;
@@ -182,7 +184,13 @@ public final class MainActivity extends Activity {
     automationLogView = new TextView(this);
     automationLogView.setTextIsSelectable(true);
     automationLogView.setText("No automation log yet.");
-    layout.addView(automationLogView);
+    automationLogScroll = new ScrollView(this);
+    automationLogScroll.setVerticalScrollBarEnabled(true);
+    automationLogScroll.addView(automationLogView);
+    LinearLayout.LayoutParams logParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        520);
+    layout.addView(automationLogScroll, logParams);
 
     TextView ocrTitle = new TextView(this);
     ocrTitle.setPadding(0, 32, 0, 8);
@@ -740,7 +748,22 @@ public final class MainActivity extends Activity {
   private void refreshAutomationLog() {
     if (automationLogView == null) return;
     String text = AutomationLog.text();
+    if (text.equals(lastAutomationLogText)) return;
+    boolean wasAtBottom = automationLogScroll != null
+        && automationLogScroll.getChildCount() > 0
+        && automationLogScroll.getScrollY() + automationLogScroll.getHeight() >= automationLogScroll.getChildAt(0).getHeight() - 24;
+    int oldScrollY = automationLogScroll == null ? 0 : automationLogScroll.getScrollY();
+    lastAutomationLogText = text;
     automationLogView.setText(text.isEmpty() ? "No automation log yet." : text);
+    if (automationLogScroll != null) {
+      automationLogScroll.post(() -> {
+        if (wasAtBottom) {
+          automationLogScroll.fullScroll(ScrollView.FOCUS_DOWN);
+        } else {
+          automationLogScroll.scrollTo(0, oldScrollY);
+        }
+      });
+    }
   }
 
   private void copyAutomationLog() {

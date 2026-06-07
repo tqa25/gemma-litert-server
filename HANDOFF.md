@@ -78,6 +78,8 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - Floating overlay crosshair is a small independent `+` target with a separate Save/Cancel panel, so it can be dragged to screen edges such as Chrome's `...` button.
 - Android app has an Automation Log terminal with Copy/Clear buttons. Termux can also call `automation_client.py logs` and `automation_client.py clear-logs`.
 - Reading workflow now logs each tap/check/scroll and stops early if `Show Reading mode` does not expose enough XML text after the calibrated tap.
+- Automation Log is displayed in a fixed-height scroll box to avoid the full app jumping while logs update.
+- Calibration target and auto-running tap indicator use a yellow dot centered on the exact tap coordinate.
 - Preferred reusable workflow is `chrome-discover-reading-gemma-summary-once`.
 - Fallback Gemini overlay workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.

@@ -23,6 +23,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class FloatingAutomationService extends Service {
+  public static final String ACTION_SHOW_TAP = "dev.gemma.androidbackend.SHOW_TAP";
+  public static final String EXTRA_X = "x";
+  public static final String EXTRA_Y = "y";
   private static final String BASE_URL = "http://127.0.0.1:8765";
 
   private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -31,6 +34,7 @@ public final class FloatingAutomationService extends Service {
   private View menu;
   private View crosshair;
   private View crosshairControls;
+  private View tapIndicator;
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
@@ -41,6 +45,9 @@ public final class FloatingAutomationService extends Service {
     }
     windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
     showBubble();
+    if (intent != null && ACTION_SHOW_TAP.equals(intent.getAction())) {
+      showTapIndicator(intent.getIntExtra(EXTRA_X, -1), intent.getIntExtra(EXTRA_Y, -1));
+    }
     return START_STICKY;
   }
 
@@ -48,6 +55,7 @@ public final class FloatingAutomationService extends Service {
   public void onDestroy() {
     removeView(crosshair);
     removeView(crosshairControls);
+    removeView(tapIndicator);
     removeView(menu);
     removeView(bubble);
     executor.shutdownNow();
@@ -128,12 +136,12 @@ public final class FloatingAutomationService extends Service {
     removeView(crosshair);
     removeView(crosshairControls);
     TextView target = new TextView(this);
-    target.setText("+");
-    target.setTextColor(0xffffffff);
+    target.setText("●");
+    target.setTextColor(0xffffd400);
     target.setGravity(Gravity.CENTER);
-    target.setTextSize(36f);
-    target.setBackgroundColor(0xdd003344);
-    WindowManager.LayoutParams params = overlayParams(72, 72);
+    target.setTextSize(42f);
+    target.setBackgroundColor(0x33000000);
+    WindowManager.LayoutParams params = overlayParams(88, 88);
     params.x = 504;
     params.y = 900;
     makeDraggable(target, params);
@@ -161,6 +169,26 @@ public final class FloatingAutomationService extends Service {
     crosshairControls = controls;
     windowManager.addView(crosshairControls, controlParams);
     toast("Drag crosshair to target, then Save");
+  }
+
+  private void showTapIndicator(int x, int y) {
+    if (x < 0 || y < 0) return;
+    removeView(tapIndicator);
+    TextView dot = new TextView(this);
+    dot.setText("●");
+    dot.setTextColor(0xffffd400);
+    dot.setGravity(Gravity.CENTER);
+    dot.setTextSize(48f);
+    dot.setBackgroundColor(0x00000000);
+    WindowManager.LayoutParams params = overlayParams(96, 96);
+    params.x = x - 48;
+    params.y = y - 48;
+    tapIndicator = dot;
+    windowManager.addView(tapIndicator, params);
+    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+      removeView(tapIndicator);
+      tapIndicator = null;
+    }, 700L);
   }
 
   private void saveCrosshair(String key) {

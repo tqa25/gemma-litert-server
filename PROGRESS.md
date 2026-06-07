@@ -230,6 +230,8 @@ test3:
 - Floating overlay crosshair is now a small independent `+` target with separate Save/Cancel controls, so it can be moved to screen edges such as Chrome's `...` button.
 - Android app now has an Automation Log terminal with Copy/Clear buttons. Automation logs are also exposed through `GET /automation/logs` and `POST /automation/logs/clear`.
 - Reading workflow now logs every major step and stops early if tapping `Show Reading mode` does not expose enough text, instead of blindly scrolling the article page.
+- Automation Log is shown in a fixed-height scroll box and Copy Automation Log copies the full in-memory session log.
+- Calibration and auto-running taps use a visible yellow dot centered on the actual tap coordinate.
 
 ## Verification Commands
 

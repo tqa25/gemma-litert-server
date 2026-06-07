@@ -6,7 +6,6 @@ import java.util.Date;
 import java.util.Locale;
 
 final class AutomationLog {
-  private static final int MAX_LINES = 300;
   private static final ArrayDeque<String> LINES = new ArrayDeque<>();
   private static final SimpleDateFormat TIME = new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
 
@@ -15,7 +14,6 @@ final class AutomationLog {
   static synchronized void add(String source, String message) {
     String line = TIME.format(new Date()) + " [" + source + "] " + (message == null ? "" : message);
     LINES.addLast(line);
-    while (LINES.size() > MAX_LINES) LINES.removeFirst();
     android.util.Log.i("GemmaAutomation", line);
   }
 
