@@ -96,10 +96,10 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - Fallback Gemini overlay workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
 - Latest successful APK build:
-  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27083205526`
-  - Commit: `5daa6c5`
+  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27095410617`
+  - Commit: `4b6a258`
   - Artifact: `gemma-android-backend-debug-apk`
-  - APK verified locally at download time: `/tmp/apk-artifact-27083205526/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26102034 bytes`
+  - APK verified locally at download time: `/tmp/apk-artifact-27095410617/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26106554 bytes`
 
 ## Latest Device Results
 
@@ -310,6 +310,18 @@ Conclusion: success
 Artifact: gemma-android-backend-debug-apk
 Downloaded APK: /tmp/apk-artifact-27083205526/gemma-android-backend-debug-apk/android-backend-debug.apk
 APK size: 26102034 bytes
+```
+
+GitHub Actions verification for JSON workflow runner passed:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27095410617
+Commit: 4b6a258
+Conclusion: success
+Artifact: gemma-android-backend-debug-apk
+Downloaded APK: /tmp/apk-artifact-27095410617/gemma-android-backend-debug-apk/android-backend-debug.apk
+APK size: 26106554 bytes
 ```
 
 Previous OCR work added optional Termux-side image preprocessing for upload/latency experiments:
