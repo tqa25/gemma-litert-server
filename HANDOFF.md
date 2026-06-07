@@ -78,10 +78,10 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - First workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
 - Latest successful APK build:
-  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27081096555`
-  - Commit: `b2bdef2`
+  - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27081477480`
+  - Commit: `5537f82`
   - Artifact: `gemma-android-backend-debug-apk`
-  - APK verified locally at download time: `/tmp/apk-artifact-27081096555/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26088786 bytes`
+  - APK verified locally at download time: `/tmp/apk-artifact-27081477480/gemma-android-backend-debug-apk/android-backend-debug.apk`, `26094850 bytes`
 
 ## Latest Device Results
 
@@ -220,7 +220,19 @@ python3 termux-bridge/automation_client.py screen-xml --output screen.xml
 
 This confirms Shizuku shell primitives are working on the ROG Phone 6. The first status after reinstall showed permission false; running `current-app` triggered permission handling, and the next `current-app` succeeded.
 
-Latest local code checkpoint adds `FloatingAutomationService` for fullscreen Chrome calibration. It uses Android overlay permission and calls the same localhost automation API. It has not yet been APK-built or device-tested at this checkpoint until the next Actions run.
+Latest code checkpoint adds `FloatingAutomationService` for fullscreen Chrome calibration. It uses Android overlay permission and calls the same localhost automation API.
+
+GitHub Actions verification for the floating overlay APK passed:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27081477480
+Commit: 5537f82
+Conclusion: success
+Artifact: gemma-android-backend-debug-apk
+Downloaded APK: /tmp/apk-artifact-27081477480/gemma-android-backend-debug-apk/android-backend-debug.apk
+APK size: 26094850 bytes
+```
 
 Previous OCR work added optional Termux-side image preprocessing for upload/latency experiments:
 
