@@ -8,6 +8,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.UUID;
@@ -17,13 +18,15 @@ import java.util.regex.Pattern;
 final class AutomationController {
   private final Context context;
   private final ShizukuShellExecutor shell;
+  private final GemmaRunner runner;
   private volatile boolean stopRequested;
   private volatile String activeRunId = "";
   private volatile String activeWorkflow = "";
   private volatile String lastError = "";
 
-  AutomationController(Context context) {
+  AutomationController(Context context, GemmaRunner runner) {
     this.context = context.getApplicationContext();
+    this.runner = runner;
     this.shell = new ShizukuShellExecutor();
   }
 
@@ -68,6 +71,12 @@ final class AutomationController {
     } else if ("gemini_copy_button".equals(key)) {
       config.geminiCopyButtonX = x;
       config.geminiCopyButtonY = y;
+    } else if ("chrome_menu_button".equals(key)) {
+      config.chromeMenuButtonX = x;
+      config.chromeMenuButtonY = y;
+    } else if ("chrome_show_reading_mode".equals(key)) {
+      config.chromeShowReadingModeX = x;
+      config.chromeShowReadingModeY = y;
     } else {
       throw new IllegalArgumentException("unknown calibration key: " + key);
     }
@@ -161,10 +170,78 @@ final class AutomationController {
   String runWorkflowJson(String body) throws Exception {
     String workflow = requireString(body, "workflow");
     boolean debugCapture = JsonUtil.booleanValue(body, "debug_capture", false);
+    if (AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE.equals(workflow)) {
+      return runChromeDiscoverReadingGemmaOnce(debugCapture);
+    }
     if (!AutomationConfig.WORKFLOW_CHROME_DISCOVER_ONCE.equals(workflow)) {
       throw new IllegalArgumentException("unknown workflow: " + workflow);
     }
     return runChromeDiscoverGeminiOnce(debugCapture);
+  }
+
+  private String runChromeDiscoverReadingGemmaOnce(boolean debugCapture) throws Exception {
+    AutomationConfig config = loadConfig();
+    if (!config.hasChromeArticleCoordinate()) throw new IllegalStateException("missing calibration: chrome_discover_first_article");
+    if (!config.hasChromeMenuCoordinate()) throw new IllegalStateException("missing calibration: chrome_menu_button");
+    if (!config.hasChromeReadingModeCoordinate()) throw new IllegalStateException("missing calibration: chrome_show_reading_mode");
+    stopRequested = false;
+    String runId = Instant.now().toString().replace(":", "").replace(".", "") + "-" + UUID.randomUUID();
+    activeRunId = runId;
+    activeWorkflow = AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE;
+    File runDir = new File(context.getFilesDir(), "automation_runs/" + runId);
+    File articleDir = new File(runDir, "article_001");
+    if (!articleDir.mkdirs() && !articleDir.isDirectory()) {
+      throw new IllegalStateException("failed to create run directory: " + articleDir);
+    }
+    long started = System.currentTimeMillis();
+    try {
+      appendLog(runDir, "start", "reading workflow started");
+      ensureAllowedChrome();
+      if (debugCapture) capture(articleDir, "feed");
+      checkRun(started, config);
+      shell.runChecked("input tap " + config.chromeDiscoverArticleX + " " + config.chromeDiscoverArticleY, 10000);
+      appendLog(runDir, "tap_article", "tapped Chrome Discover article");
+      Thread.sleep(config.articleLoadMs);
+      ensureAllowedChrome();
+      if (debugCapture) capture(articleDir, "article_page");
+      checkRun(started, config);
+      shell.runChecked("input tap " + config.chromeMenuButtonX + " " + config.chromeMenuButtonY, 10000);
+      appendLog(runDir, "tap_chrome_menu", "tapped Chrome menu");
+      Thread.sleep(config.chromeMenuOpenMs);
+      if (debugCapture) capture(articleDir, "chrome_menu");
+      shell.runChecked("input tap " + config.chromeShowReadingModeX + " " + config.chromeShowReadingModeY, 10000);
+      appendLog(runDir, "tap_reading_mode", "tapped Show Reading mode");
+      Thread.sleep(config.readingModeLoadMs);
+      ensureAllowedChrome();
+      if (debugCapture) capture(articleDir, "reading_mode");
+      String rawText = collectReadingText(config, started, runDir);
+      if (rawText.trim().length() < config.readingTextMinChars) {
+        throw new IllegalStateException("reading mode text too short: " + rawText.trim().length() + " chars");
+      }
+      writeText(new File(articleDir, "raw_text.txt"), rawText);
+      GenerationResult summary = runner.generate(new GenerationRequest(summaryPrompt(rawText), null, 512, 0.2d));
+      writeText(new File(articleDir, "summary.txt"), summary.response);
+      writeText(new File(articleDir, "metadata.json"), readingMetadataJson(runId, rawText, summary, debugCapture, started));
+      writeText(new File(runDir, "run.json"), readingRunJson(runId, "success", "", started));
+      appendLog(runDir, "saved", "reading summary saved");
+      LinkedHashMap<String, Object> result = base("run-workflow");
+      result.put("run_id", runId);
+      result.put("workflow", AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE);
+      result.put("raw_text_chars", rawText.length());
+      result.put("summary_chars", summary.response.length());
+      result.put("inference_ms", summary.inferenceMs);
+      result.put("run_dir", runDir.getAbsolutePath());
+      return JsonUtil.object(result);
+    } catch (Exception e) {
+      lastError = e.getMessage();
+      safeErrorCapture(articleDir, e);
+      writeText(new File(runDir, "run.json"), readingRunJson(runId, "error", e.getMessage(), started));
+      appendLog(runDir, "error", e.getMessage());
+      throw e;
+    } finally {
+      activeRunId = "";
+      activeWorkflow = "";
+    }
   }
 
   private String runChromeDiscoverGeminiOnce(boolean debugCapture) throws Exception {
@@ -304,6 +381,62 @@ final class AutomationController {
     return found.isEmpty() ? "unknown" : found;
   }
 
+  private String collectReadingText(AutomationConfig config, long started, File runDir) throws Exception {
+    LinkedHashSet<String> lines = new LinkedHashSet<>();
+    for (int index = 0; index <= config.readingTextMaxScrolls; index++) {
+      checkRun(started, config);
+      String xml = safeScreenXml();
+      addXmlTexts(xml, lines);
+      appendLog(runDir, "extract_text", "scroll=" + index + " chars=" + joinedText(lines).length());
+      if (index < config.readingTextMaxScrolls) {
+        shell.runChecked("input swipe 540 1850 540 700 500", 15000);
+        Thread.sleep(700);
+      }
+    }
+    return joinedText(lines);
+  }
+
+  private static void addXmlTexts(String xml, LinkedHashSet<String> lines) {
+    Matcher matcher = Pattern.compile("text=\"([^\"]+)\"").matcher(xml);
+    while (matcher.find()) {
+      String text = xmlUnescape(matcher.group(1)).replaceAll("\\s+", " ").trim();
+      if (text.length() >= 20 && !looksLikeChromeUi(text)) lines.add(text);
+    }
+  }
+
+  private static boolean looksLikeChromeUi(String text) {
+    String lower = text.toLowerCase(Locale.US);
+    return lower.equals("chrome")
+        || lower.equals("share")
+        || lower.equals("copy")
+        || lower.contains("new tab")
+        || lower.contains("address")
+        || lower.contains("menu");
+  }
+
+  private static String joinedText(LinkedHashSet<String> lines) {
+    StringBuilder out = new StringBuilder();
+    for (String line : lines) {
+      if (out.length() > 0) out.append("\n");
+      out.append(line);
+    }
+    return out.toString();
+  }
+
+  private static String xmlUnescape(String value) {
+    return value
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">");
+  }
+
+  private static String summaryPrompt(String rawText) {
+    return "Tóm tắt bài viết sau bằng tiếng Việt. Trả về: 1) ý chính, 2) các điểm quan trọng, 3) kết luận ngắn.\n\n"
+        + rawText;
+  }
+
   private String screenXml() throws Exception {
     AutomationShellResult result = shell.runChecked(
         "tmp=/sdcard/window-gemma-automation.xml; uiautomator dump --compressed \"$tmp\" >/dev/null && cat \"$tmp\"; rm -f \"$tmp\"",
@@ -357,9 +490,17 @@ final class AutomationController {
       config.geminiSummaryButtonY = JsonUtil.intValue(json, "gemini_summary_button_y", config.geminiSummaryButtonY);
       config.geminiCopyButtonX = JsonUtil.intValue(json, "gemini_copy_button_x", config.geminiCopyButtonX);
       config.geminiCopyButtonY = JsonUtil.intValue(json, "gemini_copy_button_y", config.geminiCopyButtonY);
+      config.chromeMenuButtonX = JsonUtil.intValue(json, "chrome_menu_button_x", config.chromeMenuButtonX);
+      config.chromeMenuButtonY = JsonUtil.intValue(json, "chrome_menu_button_y", config.chromeMenuButtonY);
+      config.chromeShowReadingModeX = JsonUtil.intValue(json, "chrome_show_reading_mode_x", config.chromeShowReadingModeX);
+      config.chromeShowReadingModeY = JsonUtil.intValue(json, "chrome_show_reading_mode_y", config.chromeShowReadingModeY);
       config.articleLoadMs = JsonUtil.intValue(json, "article_load_ms", config.articleLoadMs);
       config.geminiOpenMs = JsonUtil.intValue(json, "gemini_open_ms", config.geminiOpenMs);
       config.geminiSummaryMs = JsonUtil.intValue(json, "gemini_summary_ms", config.geminiSummaryMs);
+      config.chromeMenuOpenMs = JsonUtil.intValue(json, "chrome_menu_open_ms", config.chromeMenuOpenMs);
+      config.readingModeLoadMs = JsonUtil.intValue(json, "reading_mode_load_ms", config.readingModeLoadMs);
+      config.readingTextMaxScrolls = JsonUtil.intValue(json, "reading_text_max_scrolls", config.readingTextMaxScrolls);
+      config.readingTextMinChars = JsonUtil.intValue(json, "reading_text_min_chars", config.readingTextMinChars);
       config.maxRunMinutes = JsonUtil.intValue(json, "max_run_minutes", config.maxRunMinutes);
     } catch (Exception e) {
       lastError = "failed to load automation config: " + e.getMessage();
@@ -375,9 +516,17 @@ final class AutomationController {
     row.put("gemini_summary_button_y", config.geminiSummaryButtonY);
     row.put("gemini_copy_button_x", config.geminiCopyButtonX);
     row.put("gemini_copy_button_y", config.geminiCopyButtonY);
+    row.put("chrome_menu_button_x", config.chromeMenuButtonX);
+    row.put("chrome_menu_button_y", config.chromeMenuButtonY);
+    row.put("chrome_show_reading_mode_x", config.chromeShowReadingModeX);
+    row.put("chrome_show_reading_mode_y", config.chromeShowReadingModeY);
     row.put("article_load_ms", config.articleLoadMs);
     row.put("gemini_open_ms", config.geminiOpenMs);
     row.put("gemini_summary_ms", config.geminiSummaryMs);
+    row.put("chrome_menu_open_ms", config.chromeMenuOpenMs);
+    row.put("reading_mode_load_ms", config.readingModeLoadMs);
+    row.put("reading_text_max_scrolls", config.readingTextMaxScrolls);
+    row.put("reading_text_min_chars", config.readingTextMinChars);
     row.put("max_run_minutes", config.maxRunMinutes);
     writeText(configFile(), JsonUtil.object(row));
   }
@@ -418,6 +567,33 @@ final class AutomationController {
     LinkedHashMap<String, Object> row = new LinkedHashMap<>();
     row.put("run_id", runId);
     row.put("workflow", AutomationConfig.WORKFLOW_CHROME_DISCOVER_ONCE);
+    row.put("status", status);
+    row.put("error", error == null ? "" : error);
+    row.put("started_at_ms", started);
+    row.put("finished_at_ms", System.currentTimeMillis());
+    return JsonUtil.object(row);
+  }
+
+  private String readingMetadataJson(String runId, String rawText, GenerationResult summary, boolean debugCapture, long started) throws Exception {
+    LinkedHashMap<String, Object> row = new LinkedHashMap<>();
+    row.put("workflow", AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE);
+    row.put("run_id", runId);
+    row.put("article_index", 1);
+    row.put("summary_backend", "gemma_local");
+    row.put("started_at_ms", started);
+    row.put("finished_at_ms", System.currentTimeMillis());
+    row.put("current_package_after", currentPackage());
+    row.put("raw_text_chars", rawText.length());
+    row.put("summary_chars", summary.response.length());
+    row.put("inference_ms", summary.inferenceMs);
+    row.put("debug_capture", debugCapture);
+    return JsonUtil.object(row);
+  }
+
+  private String readingRunJson(String runId, String status, String error, long started) {
+    LinkedHashMap<String, Object> row = new LinkedHashMap<>();
+    row.put("run_id", runId);
+    row.put("workflow", AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE);
     row.put("status", status);
     row.put("error", error == null ? "" : error);
     row.put("started_at_ms", started);

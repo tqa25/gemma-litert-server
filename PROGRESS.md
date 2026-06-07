@@ -85,7 +85,8 @@ Chrome new tab / Discover feed already open
 - Android backend now includes an initial Shizuku-backed automation API under `/automation/*`.
 - Android app now includes an initial floating automation overlay service for Chrome/Gemini calibration and manual workflow control.
 - Termux now includes `termux-bridge/automation_client.py` for automation status, primitives, calibration, screenshots/XML, and the first Chrome Discover + Gemini workflow.
-- First automation workflow name: `chrome-discover-gemini-summary-once`.
+- Fallback automation workflow name: `chrome-discover-gemini-summary-once`.
+- Primary reusable automation workflow name: `chrome-discover-reading-gemma-summary-once`.
 
 ## Important Files
 
@@ -207,7 +208,8 @@ test3:
 - Chrome Discover is preferred over Google News app because tapped articles open in the same Chrome tab on the user's phone, and one Back returns to the Discover feed.
 - Automation must use Shizuku first; Accessibility Service remains a later option.
 - Automation guardrails: start with package whitelist, stop/status endpoints, max run duration, calibration for fixed tap points, and stop-on-failure snapshot in debug/error paths.
-- Gemini overlay is the first summary backend; Gemma local can become a later `summary_backend` option after article extraction is reliable.
+- Reading Mode + Gemma local is now the preferred reusable path when Chrome `Show Reading mode` can be opened reliably from fixed coordinates.
+- Gemini overlay remains as a fallback summary backend when Reading Mode extraction is unavailable or too short.
 - Use the Android floating automation overlay for fullscreen Chrome calibration instead of split screen.
 
 ## Known Issues And Caveats
@@ -287,9 +289,11 @@ python3 termux-bridge/automation_client.py current-app
 python3 termux-bridge/automation_client.py screenshot --output screen.png
 python3 termux-bridge/automation_client.py screen-xml --output screen.xml
 python3 termux-bridge/automation_client.py calibrate chrome_discover_first_article --x 540 --y 700
+python3 termux-bridge/automation_client.py calibrate chrome_menu_button --x 1010 --y 120
+python3 termux-bridge/automation_client.py calibrate chrome_show_reading_mode --x 720 --y 860
 python3 termux-bridge/automation_client.py calibrate gemini_summary_button --x 540 --y 1800
 python3 termux-bridge/automation_client.py calibrate gemini_copy_button --x 960 --y 2100
-python3 termux-bridge/automation_client.py run chrome-discover-gemini-summary-once --debug-capture
+python3 termux-bridge/automation_client.py run chrome-discover-reading-gemma-summary-once --debug-capture
 ```
 
 Fast OCR:

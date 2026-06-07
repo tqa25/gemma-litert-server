@@ -98,6 +98,19 @@ Chrome Discover feed already open
   -> save summary and metadata locally
 ```
 
+The preferred reusable workflow opens Chrome Reading Mode with calibrated coordinates and summarizes extracted text through the local Gemma runner:
+
+```text
+Chrome Discover feed already open
+  -> tap calibrated article card
+  -> tap calibrated Chrome menu button
+  -> tap calibrated Show Reading mode menu item
+  -> dump XML while scrolling Reading Mode
+  -> dedupe visible text
+  -> runner.generate(text-only Vietnamese summary prompt)
+  -> save raw_text.txt, summary.txt, metadata.json
+```
+
 ## Modules
 
 ### Android Backend App
@@ -255,8 +268,11 @@ Calibration and workflow:
 ```text
 POST /automation/calibrate
   {"key":"chrome_discover_first_article","x":540,"y":700}
+  {"key":"chrome_menu_button","x":1010,"y":120}
+  {"key":"chrome_show_reading_mode","x":720,"y":860}
 
 POST /automation/workflows/run
+  {"workflow":"chrome-discover-reading-gemma-summary-once","debug_capture":true}
   {"workflow":"chrome-discover-gemini-summary-once","debug_capture":true}
 ```
 
@@ -371,6 +387,27 @@ automation_client.py run chrome-discover-gemini-summary-once
   -> dump XML and tap copy if visible
   -> otherwise tap calibrated gemini_copy_button
   -> read Android ClipboardManager
+  -> save summary.txt, metadata.json, run.json, workflow_log.jsonl
+```
+
+### Chrome Discover Reading Gemma Summary Once
+
+```text
+automation_client.py run chrome-discover-reading-gemma-summary-once
+  -> POST /automation/workflows/run
+  -> AutomationController loads automation_config.json
+  -> verify Chrome article, menu, and reading-mode coordinates exist
+  -> verify current package is com.android.chrome
+  -> tap chrome_discover_first_article
+  -> wait article_load_ms
+  -> tap chrome_menu_button
+  -> wait chrome_menu_open_ms
+  -> tap chrome_show_reading_mode
+  -> wait reading_mode_load_ms
+  -> dump XML and collect text nodes
+  -> swipe through Reading Mode up to reading_text_max_scrolls
+  -> dedupe text and write raw_text.txt
+  -> call GemmaRunner.generate with a Vietnamese summary prompt
   -> save summary.txt, metadata.json, run.json, workflow_log.jsonl
 ```
 

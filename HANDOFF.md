@@ -74,8 +74,9 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - Shizuku dependencies were added: `dev.rikka.shizuku:api:13.1.5` and `dev.rikka.shizuku:provider:13.1.5`; manifest now includes `rikka.shizuku.ShizukuProvider`.
 - `gradle.properties` now sets `android.useAndroidX=true` because Shizuku provider depends on AndroidX annotation.
 - Termux automation CLI supports status, stop, current-app, tap, swipe, home, back, longpress-home, wait, screenshot, screen-xml, open-app, calibration, and workflow run.
-- Floating overlay supports Capture, Mark Article, Mark Summary, Mark Copy, Run Once, Stop, and Hide.
-- First workflow is `chrome-discover-gemini-summary-once`.
+- Floating overlay supports Capture, Mark Article, Mark Menu, Mark Reading, Mark Summary, Mark Copy, Run Reading, Run Gemini, Stop, and Hide.
+- Preferred reusable workflow is `chrome-discover-reading-gemma-summary-once`.
+- Fallback Gemini overlay workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
 - Latest successful APK build:
   - Run: `https://github.com/tqa25/gemma-litert-server/actions/runs/27081477480`
@@ -318,7 +319,7 @@ Suggested device test flow:
 2. Start Shizuku on the phone, open the Android backend app once, and grant Shizuku permission when requested.
 3. Start backend server, then from Termux run `python3 termux-bridge/automation_client.py status`; verify `shizuku_available=true` and `shizuku_permission_granted=true`.
 4. With Chrome Discover feed open, test primitives: `current-app`, `screenshot`, `screen-xml`, `longpress-home`, then calibrate `chrome_discover_first_article`, `gemini_summary_button`, and `gemini_copy_button`.
-5. Run `python3 termux-bridge/automation_client.py run chrome-discover-gemini-summary-once --debug-capture` and inspect `automation_runs/{run_id}`.
+5. Run `python3 termux-bridge/automation_client.py run chrome-discover-reading-gemma-summary-once --debug-capture` and inspect `automation_runs/{run_id}`.
 6. If Shizuku reflection shell fails at runtime, replace `ShizukuShellExecutor` with a Shizuku UserService implementation.
 7. Only after one-article workflow is stable, add batch mode and Chrome feed swipe calibration. Streaming remains postponed.
 

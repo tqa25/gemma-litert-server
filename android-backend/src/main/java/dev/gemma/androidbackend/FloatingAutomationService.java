@@ -91,9 +91,14 @@ public final class FloatingAutomationService extends Service {
       return "captured";
     })));
     layout.addView(menuButton("Mark Article", v -> showCrosshair("chrome_discover_first_article")));
+    layout.addView(menuButton("Mark Menu", v -> showCrosshair("chrome_menu_button")));
+    layout.addView(menuButton("Mark Reading", v -> showCrosshair("chrome_show_reading_mode")));
     layout.addView(menuButton("Mark Summary", v -> showCrosshair("gemini_summary_button")));
     layout.addView(menuButton("Mark Copy", v -> showCrosshair("gemini_copy_button")));
-    layout.addView(menuButton("Run Once", v -> runHttp("run once", () -> post(
+    layout.addView(menuButton("Run Reading", v -> runHttp("run reading", () -> post(
+        "/automation/workflows/run",
+        "{\"workflow\":\"chrome-discover-reading-gemma-summary-once\",\"debug_capture\":true}"))));
+    layout.addView(menuButton("Run Gemini", v -> runHttp("run gemini", () -> post(
         "/automation/workflows/run",
         "{\"workflow\":\"chrome-discover-gemini-summary-once\",\"debug_capture\":true}"))));
     layout.addView(menuButton("Stop", v -> runHttp("stop", () -> post("/automation/stop", "{}"))));

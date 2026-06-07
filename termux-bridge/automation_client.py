@@ -50,12 +50,21 @@ def main(argv: list[str] | None = None) -> int:
     open_app.add_argument("--package", required=True)
 
     calibrate = sub.add_parser("calibrate")
-    calibrate.add_argument("key", choices=["chrome_discover_first_article", "gemini_summary_button", "gemini_copy_button"])
+    calibrate.add_argument(
+        "key",
+        choices=[
+            "chrome_discover_first_article",
+            "gemini_summary_button",
+            "gemini_copy_button",
+            "chrome_menu_button",
+            "chrome_show_reading_mode",
+        ],
+    )
     calibrate.add_argument("--x", type=int, required=True)
     calibrate.add_argument("--y", type=int, required=True)
 
     run = sub.add_parser("run")
-    run.add_argument("workflow", choices=["chrome-discover-gemini-summary-once"])
+    run.add_argument("workflow", choices=["chrome-discover-gemini-summary-once", "chrome-discover-reading-gemma-summary-once"])
     run.add_argument("--debug-capture", action="store_true")
 
     args = parser.parse_args(argv)

@@ -21,7 +21,7 @@ final class HttpApiServer extends NanoHTTPD {
     super(BackendConfig.HOST, BackendConfig.PORT);
     this.runner = runner;
     this.logger = new BenchmarkLogger(context);
-    this.automation = new AutomationController(context);
+    this.automation = new AutomationController(context, runner);
     this.startedAtMs = System.currentTimeMillis();
   }
 
