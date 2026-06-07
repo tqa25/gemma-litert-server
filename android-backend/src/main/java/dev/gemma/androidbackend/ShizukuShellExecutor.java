@@ -47,16 +47,17 @@ final class ShizukuShellExecutor {
     ByteArrayOutputStream stderr = new ByteArrayOutputStream();
     Thread outThread = pump(process.getInputStream(), stdout);
     Thread errThread = pump(process.getErrorStream(), stderr);
-    boolean finished = process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
+    boolean finished = waitForProcess(process, timeoutMs);
     if (!finished) {
       process.destroyForcibly();
       throw new IllegalStateException("shell command timed out after " + timeoutMs + "ms");
     }
     outThread.join(1000);
     errThread.join(1000);
+    int exitCode = process.waitFor();
     long durationMs = (System.nanoTime() - started) / 1_000_000L;
     return new AutomationShellResult(
-        process.exitValue(),
+        exitCode,
         stdout.toByteArray(),
         new String(stderr.toByteArray(), java.nio.charset.StandardCharsets.UTF_8),
         durationMs);
@@ -89,5 +90,14 @@ final class ShizukuShellExecutor {
     Method method = Shizuku.class.getDeclaredMethod("newProcess", String[].class, String[].class, String.class);
     method.setAccessible(true);
     return (Process) method.invoke(null, new String[] {"sh", "-c", command}, null, null);
+  }
+
+  private static boolean waitForProcess(Process process, long timeoutMs) throws Exception {
+    try {
+      Method method = process.getClass().getMethod("waitForTimeout", long.class, TimeUnit.class);
+      return (Boolean) method.invoke(process, timeoutMs, TimeUnit.MILLISECONDS);
+    } catch (NoSuchMethodException ignored) {
+      return process.waitFor(timeoutMs, TimeUnit.MILLISECONDS);
+    }
   }
 }
