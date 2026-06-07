@@ -69,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("workflow", choices=["chrome-discover-gemini-summary-once", "chrome-discover-reading-gemma-summary-once"])
     run.add_argument("--debug-capture", action="store_true")
 
+    run_json = sub.add_parser("run-json")
+    run_json.add_argument("--file", required=True, help="Path to a JSON workflow definition.")
+
     args = parser.parse_args(argv)
     try:
         result = dispatch(args)
@@ -145,6 +148,9 @@ def dispatch(args: argparse.Namespace) -> dict | None:
             f"{base}/automation/workflows/run",
             {"workflow": args.workflow, "debug_capture": args.debug_capture},
         )
+    if args.command == "run-json":
+        payload = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        return call_json("POST", f"{base}/automation/workflows/run-json", payload)
     raise ValueError(f"unknown command: {args.command}")
 
 

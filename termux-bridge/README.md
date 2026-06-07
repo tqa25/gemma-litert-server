@@ -70,3 +70,24 @@ termux-bridge/benchmark.jsonl
 
 Use this to compare Mock vs LiteRT and ROG Phone 6 vs Oracle VM.
 For image requests, the log also records original upload bytes, preprocessed upload bytes, preprocessing time, and whether the image was resized.
+
+## Automation JSON workflows
+
+The automation client can run a small sequential JSON workflow. This is the first n8n-like layer: each node has an `id`, a `type`, parameters, and can reference earlier output through `{{node.field}}`.
+
+Example:
+
+```bash
+python3 termux-bridge/automation_client.py run-json \
+  --file docs/automation-workflows/chrome_discover_visible_xml_summary.json
+```
+
+The first supported node types are:
+
+```text
+tap_coordinate, tap, swipe, wait, current_app, dump_xml, screenshot,
+extract_text_from_xml, gemma_summarize, gemma_generate, save_file,
+assert_text_contains, back, home, open_app, capture_debug
+```
+
+`tap_coordinate` uses the existing calibration registry, for example `chrome_discover_first_article`, `chrome_menu_button`, and `chrome_show_reading_mode`.

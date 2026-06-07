@@ -1,6 +1,6 @@
 # Progress: gemma-litert-server
 
-Last updated: 2026-06-06
+Last updated: 2026-06-07
 
 ## Startup Instructions For New Agents
 
@@ -87,6 +87,8 @@ Chrome new tab / Discover feed already open
 - Termux now includes `termux-bridge/automation_client.py` for automation status, primitives, calibration, screenshots/XML, and the first Chrome Discover + Gemini workflow.
 - Fallback automation workflow name: `chrome-discover-gemini-summary-once`.
 - Primary reusable automation workflow name: `chrome-discover-reading-gemma-summary-once`.
+- New reusable automation layer: `POST /automation/workflows/run-json` runs sequential JSON workflows with node outputs referenced as `{{node.field}}`.
+- Example JSON workflow: `docs/automation-workflows/chrome_discover_visible_xml_summary.json`.
 
 ## Important Files
 
@@ -94,6 +96,7 @@ Chrome new tab / Discover feed already open
 - `docs/architecture.md`: system architecture map.
 - `termux-bridge/client.py`: Termux CLI client and benchmark helper.
 - `termux-bridge/automation_client.py`: Termux CLI for Android automation API.
+- `docs/automation-workflows/chrome_discover_visible_xml_summary.json`: first n8n-like sequential workflow example.
 - `termux-bridge/test_client.py`: unit tests for Termux image/OCR option resolution and multipart helpers.
 - `termux-bridge/README.md`: Termux setup and usage.
 - `docs/termux-client-test-plan.md`: device test plan for Termux path.
@@ -233,6 +236,9 @@ test3:
 - Automation Log is shown in a fixed-height scroll box and Copy Automation Log copies the full in-memory session log.
 - Calibration and auto-running taps use a visible yellow dot centered on the actual tap coordinate.
 - Tap indicator overlay is non-touchable so it does not block the underlying `input tap`; yellow dots are drawn with a custom centered view instead of text glyphs.
+- Latest device log on ROG Phone 6 shows the article tap, Chrome menu tap, and `Show Reading mode` tap are all reaching the UI, but the Reading Mode extraction step fails on `swipe` with `java.lang.SecurityException: Injecting to another application requires INJECT_EVENTS permission`.
+- The current blocker is therefore not tap calibration. The remaining problem is a Shizuku-safe way to scroll or extract Reading Mode text without relying on cross-app motion injection.
+- Sequential JSON workflow runner now exists as the foundation for n8n-like automation. Initial nodes: `tap_coordinate`, `tap`, `swipe`, `wait`, `current_app`, `dump_xml`, `screenshot`, `extract_text_from_xml`, `gemma_summarize`, `gemma_generate`, `save_file`, `assert_text_contains`, `back`, `home`, `open_app`, and `capture_debug`.
 
 ## Verification Commands
 
@@ -251,6 +257,7 @@ Automation local checks:
 python3 -m py_compile termux-bridge/automation_client.py
 python3 termux-bridge/automation_client.py --help
 python3 termux-bridge/automation_client.py run --help
+python3 termux-bridge/automation_client.py run-json --help
 ./gradlew :android-backend:compileDebugJavaWithJavac -x :android-backend:processDebugResources --stacktrace
 ```
 
@@ -357,6 +364,7 @@ python3 termux-bridge/automation_client.py calibrate chrome_show_reading_mode --
 python3 termux-bridge/automation_client.py calibrate gemini_summary_button --x 540 --y 1800
 python3 termux-bridge/automation_client.py calibrate gemini_copy_button --x 960 --y 2100
 python3 termux-bridge/automation_client.py run chrome-discover-reading-gemma-summary-once --debug-capture
+python3 termux-bridge/automation_client.py run-json --file docs/automation-workflows/chrome_discover_visible_xml_summary.json
 ```
 
 Fast OCR:

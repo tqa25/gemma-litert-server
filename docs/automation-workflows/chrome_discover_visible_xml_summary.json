@@ -1,0 +1,42 @@
+{
+  "workflow": "chrome-discover-visible-xml-summary",
+  "debug_capture": true,
+  "steps": [
+    {
+      "id": "tap_article",
+      "type": "tap_coordinate",
+      "coordinate": "chrome_discover_first_article"
+    },
+    {
+      "id": "wait_article",
+      "type": "wait",
+      "ms": 5000
+    },
+    {
+      "id": "dump_article_xml",
+      "type": "dump_xml",
+      "save_as": "article.xml"
+    },
+    {
+      "id": "extract_visible_text",
+      "type": "extract_text_from_xml",
+      "input": "{{dump_article_xml.xml}}",
+      "save_as": "visible_text.txt"
+    },
+    {
+      "id": "summarize",
+      "type": "gemma_summarize",
+      "input": "{{extract_visible_text.text}}",
+      "prompt": "Tom tat noi dung sau bang tieng Viet. Neu noi dung qua ngan, hay noi ro la du lieu man hinh chua du de tom tat.",
+      "max_tokens": 512,
+      "temperature": 0.2,
+      "save_as": "summary.txt"
+    },
+    {
+      "id": "save_raw_text",
+      "type": "save_file",
+      "path": "raw_text.txt",
+      "input": "{{extract_visible_text.text}}"
+    }
+  ]
+}

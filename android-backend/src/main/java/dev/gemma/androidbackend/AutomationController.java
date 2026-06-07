@@ -12,9 +12,12 @@ import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 final class AutomationController {
   private final Context context;
@@ -184,6 +187,59 @@ final class AutomationController {
       throw new IllegalArgumentException("unknown workflow: " + workflow);
     }
     return runChromeDiscoverGeminiOnce(debugCapture);
+  }
+
+  String runJsonWorkflowJson(String body) throws Exception {
+    JSONObject workflow = new JSONObject(body);
+    String workflowName = workflow.optString("workflow", workflow.optString("name", "json-workflow"));
+    JSONArray steps = workflow.getJSONArray("steps");
+    boolean debugCapture = workflow.optBoolean("debug_capture", false);
+    AutomationConfig config = loadConfig();
+    stopRequested = false;
+    String runId = Instant.now().toString().replace(":", "").replace(".", "") + "-" + UUID.randomUUID();
+    activeRunId = runId;
+    activeWorkflow = workflowName;
+    File runDir = new File(context.getFilesDir(), "automation_runs/" + runId);
+    if (!runDir.mkdirs() && !runDir.isDirectory()) {
+      throw new IllegalStateException("failed to create run directory: " + runDir);
+    }
+    long started = System.currentTimeMillis();
+    LinkedHashMap<String, LinkedHashMap<String, Object>> state = new LinkedHashMap<>();
+    try {
+      AutomationLog.clear();
+      AutomationLog.add("json-workflow", "start name=" + workflowName + " run_id=" + runId + " steps=" + steps.length());
+      appendLog(runDir, "start", "json workflow started: " + workflowName);
+      for (int index = 0; index < steps.length(); index++) {
+        checkRun(started, config);
+        JSONObject step = steps.getJSONObject(index);
+        String id = step.optString("id", "step_" + (index + 1));
+        String type = step.getString("type");
+        long nodeStarted = System.currentTimeMillis();
+        AutomationLog.add("node", "start id=" + id + " type=" + type);
+        LinkedHashMap<String, Object> output = executeJsonWorkflowNode(step, state, config, runDir, debugCapture);
+        output.put("duration_ms", System.currentTimeMillis() - nodeStarted);
+        state.put(id, output);
+        state.put("previous", output);
+        appendLog(runDir, "node_success", id + " type=" + type + " duration_ms=" + output.get("duration_ms"));
+        AutomationLog.add("node", "done id=" + id + " type=" + type + " duration_ms=" + output.get("duration_ms"));
+      }
+      writeText(new File(runDir, "run.json"), customRunJson(runId, workflowName, "success", "", started, steps.length()));
+      LinkedHashMap<String, Object> result = base("run-json-workflow");
+      result.put("run_id", runId);
+      result.put("workflow", workflowName);
+      result.put("steps", steps.length());
+      result.put("run_dir", runDir.getAbsolutePath());
+      return JsonUtil.object(result);
+    } catch (Exception e) {
+      lastError = e.getMessage();
+      AutomationLog.add("json-workflow", "error: " + e.getMessage());
+      writeText(new File(runDir, "run.json"), customRunJson(runId, workflowName, "error", e.getMessage(), started, steps.length()));
+      appendLog(runDir, "error", e.getMessage());
+      throw e;
+    } finally {
+      activeRunId = "";
+      activeWorkflow = "";
+    }
   }
 
   private String runChromeDiscoverReadingGemmaOnce(boolean debugCapture) throws Exception {
@@ -380,6 +436,199 @@ final class AutomationController {
     showTapIndicator(x, y);
     AutomationLog.add("tap", x + "," + y);
     return shell.runChecked("input tap " + x + " " + y, 10000);
+  }
+
+  private LinkedHashMap<String, Object> executeJsonWorkflowNode(
+      JSONObject step,
+      LinkedHashMap<String, LinkedHashMap<String, Object>> state,
+      AutomationConfig config,
+      File runDir,
+      boolean debugCapture) throws Exception {
+    String type = step.getString("type").replace("-", "_").toLowerCase(Locale.US);
+    LinkedHashMap<String, Object> output = new LinkedHashMap<>();
+    output.put("type", type);
+    if ("tap_coordinate".equals(type)) {
+      String key = step.optString("coordinate", step.optString("key", ""));
+      int[] point = coordinatePoint(config, key);
+      tap(point[0], point[1]);
+      output.put("coordinate", key);
+      output.put("x", point[0]);
+      output.put("y", point[1]);
+      return output;
+    }
+    if ("tap".equals(type)) {
+      int x = step.getInt("x");
+      int y = step.getInt("y");
+      tap(x, y);
+      output.put("x", x);
+      output.put("y", y);
+      return output;
+    }
+    if ("swipe".equals(type)) {
+      int x1 = step.getInt("x1");
+      int y1 = step.getInt("y1");
+      int x2 = step.getInt("x2");
+      int y2 = step.getInt("y2");
+      int duration = step.optInt("duration_ms", 400);
+      shell.runChecked("input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + duration, 15000);
+      output.put("x1", x1);
+      output.put("y1", y1);
+      output.put("x2", x2);
+      output.put("y2", y2);
+      output.put("duration_ms_requested", duration);
+      return output;
+    }
+    if ("wait".equals(type)) {
+      int ms = step.optInt("ms", 1000);
+      Thread.sleep(ms);
+      output.put("wait_ms", ms);
+      return output;
+    }
+    if ("current_app".equals(type)) {
+      output.put("package", currentPackage());
+      return output;
+    }
+    if ("dump_xml".equals(type)) {
+      String xml = screenXml();
+      output.put("xml", xml);
+      output.put("xml_chars", xml.length());
+      String saveAs = step.optString("save_as", "");
+      if (!saveAs.isEmpty()) output.put("path", writeRunFile(runDir, saveAs, xml));
+      return output;
+    }
+    if ("screenshot".equals(type)) {
+      AutomationShellResult png = shell.runChecked("screencap -p", 20000);
+      String saveAs = step.optString("save_as", "screenshot.png");
+      File file = runFile(runDir, saveAs);
+      Files.write(file.toPath(), png.stdout);
+      output.put("image_bytes", png.stdout.length);
+      output.put("path", file.getAbsolutePath());
+      return output;
+    }
+    if ("extract_text_from_xml".equals(type)) {
+      String xml = resolveValue(step.optString("input", "{{previous.xml}}"), state);
+      LinkedHashSet<String> lines = new LinkedHashSet<>();
+      addXmlTexts(xml, lines);
+      String text = joinedText(lines);
+      output.put("text", text);
+      output.put("text_chars", text.length());
+      output.put("line_count", lines.size());
+      String saveAs = step.optString("save_as", "");
+      if (!saveAs.isEmpty()) output.put("path", writeRunFile(runDir, saveAs, text));
+      return output;
+    }
+    if ("gemma_summarize".equals(type) || "gemma_generate".equals(type)) {
+      String input = resolveValue(step.optString("input", "{{previous.text}}"), state);
+      String promptTemplate = step.optString("prompt", "");
+      String prompt = promptTemplate.isEmpty() ? input : resolveValue(promptTemplate, state);
+      if (!input.isEmpty() && !prompt.contains(input)) prompt = prompt + "\n\n" + input;
+      GenerationResult summary = runner.generate(new GenerationRequest(
+          prompt,
+          null,
+          step.optInt("max_tokens", 512),
+          step.optDouble("temperature", 0.2d)));
+      output.put("text", summary.response);
+      output.put("text_chars", summary.response.length());
+      output.put("inference_ms", summary.inferenceMs);
+      String saveAs = step.optString("save_as", "");
+      if (!saveAs.isEmpty()) output.put("path", writeRunFile(runDir, saveAs, summary.response));
+      return output;
+    }
+    if ("save_file".equals(type)) {
+      String path = step.getString("path");
+      String text = resolveValue(step.optString("text", step.optString("input", "{{previous.text}}")), state);
+      output.put("path", writeRunFile(runDir, path, text));
+      output.put("text_chars", text.length());
+      return output;
+    }
+    if ("assert_text_contains".equals(type)) {
+      String text = resolveValue(step.optString("input", "{{previous.text}}"), state);
+      String contains = resolveValue(step.getString("contains"), state);
+      if (!text.contains(contains)) throw new IllegalStateException("assert_text_contains failed: " + contains);
+      output.put("matched", true);
+      output.put("contains", contains);
+      return output;
+    }
+    if ("back".equals(type)) {
+      shell.runChecked("input keyevent KEYCODE_BACK", 10000);
+      return output;
+    }
+    if ("home".equals(type)) {
+      shell.runChecked("input keyevent KEYCODE_HOME", 10000);
+      return output;
+    }
+    if ("open_app".equals(type)) {
+      String packageName = step.getString("package");
+      shell.runChecked("monkey -p " + shellQuote(packageName) + " -c android.intent.category.LAUNCHER 1", 15000);
+      output.put("package", packageName);
+      return output;
+    }
+    if ("capture_debug".equals(type)) {
+      if (debugCapture) capture(runDir, step.optString("name", "debug"));
+      output.put("captured", debugCapture);
+      return output;
+    }
+    throw new IllegalArgumentException("unknown workflow node type: " + type);
+  }
+
+  private static int[] coordinatePoint(AutomationConfig config, String key) {
+    if ("chrome_discover_first_article".equals(key) && config.hasChromeArticleCoordinate()) {
+      return new int[] {config.chromeDiscoverArticleX, config.chromeDiscoverArticleY};
+    }
+    if ("chrome_menu_button".equals(key) && config.hasChromeMenuCoordinate()) {
+      return new int[] {config.chromeMenuButtonX, config.chromeMenuButtonY};
+    }
+    if ("chrome_show_reading_mode".equals(key) && config.hasChromeReadingModeCoordinate()) {
+      return new int[] {config.chromeShowReadingModeX, config.chromeShowReadingModeY};
+    }
+    if ("gemini_summary_button".equals(key) && config.hasGeminiSummaryCoordinate()) {
+      return new int[] {config.geminiSummaryButtonX, config.geminiSummaryButtonY};
+    }
+    if ("gemini_copy_button".equals(key) && config.hasGeminiCopyCoordinate()) {
+      return new int[] {config.geminiCopyButtonX, config.geminiCopyButtonY};
+    }
+    throw new IllegalStateException("missing calibration: " + key);
+  }
+
+  private static String resolveValue(String template, LinkedHashMap<String, LinkedHashMap<String, Object>> state) {
+    Pattern exact = Pattern.compile("^\\{\\{([a-zA-Z0-9_\\-]+)\\.([a-zA-Z0-9_\\-]+)}}$");
+    Matcher exactMatcher = exact.matcher(template);
+    if (exactMatcher.find()) {
+      Object value = stateValue(state, exactMatcher.group(1), exactMatcher.group(2));
+      return value == null ? "" : value.toString();
+    }
+    Matcher matcher = Pattern.compile("\\{\\{([a-zA-Z0-9_\\-]+)\\.([a-zA-Z0-9_\\-]+)}}").matcher(template);
+    StringBuffer out = new StringBuffer();
+    while (matcher.find()) {
+      Object value = stateValue(state, matcher.group(1), matcher.group(2));
+      matcher.appendReplacement(out, Matcher.quoteReplacement(value == null ? "" : value.toString()));
+    }
+    matcher.appendTail(out);
+    return out.toString();
+  }
+
+  private static Object stateValue(
+      LinkedHashMap<String, LinkedHashMap<String, Object>> state,
+      String stepId,
+      String field) {
+    Map<String, Object> row = state.get(stepId);
+    return row == null ? null : row.get(field);
+  }
+
+  private static File runFile(File runDir, String relativePath) {
+    String clean = relativePath.replace("\\", "/");
+    while (clean.startsWith("/")) clean = clean.substring(1);
+    if (clean.contains("..")) throw new IllegalArgumentException("path must stay inside run directory");
+    File file = new File(runDir, clean);
+    File parent = file.getParentFile();
+    if (parent != null) parent.mkdirs();
+    return file;
+  }
+
+  private static String writeRunFile(File runDir, String relativePath, String text) throws Exception {
+    File file = runFile(runDir, relativePath);
+    writeText(file, text);
+    return file.getAbsolutePath();
   }
 
   private void showTapIndicator(int x, int y) {
@@ -651,6 +900,18 @@ final class AutomationController {
     row.put("workflow", AutomationConfig.WORKFLOW_CHROME_READING_GEMMA_ONCE);
     row.put("status", status);
     row.put("error", error == null ? "" : error);
+    row.put("started_at_ms", started);
+    row.put("finished_at_ms", System.currentTimeMillis());
+    return JsonUtil.object(row);
+  }
+
+  private String customRunJson(String runId, String workflow, String status, String error, long started, int steps) {
+    LinkedHashMap<String, Object> row = new LinkedHashMap<>();
+    row.put("run_id", runId);
+    row.put("workflow", workflow);
+    row.put("status", status);
+    row.put("error", error == null ? "" : error);
+    row.put("steps", steps);
     row.put("started_at_ms", started);
     row.put("finished_at_ms", System.currentTimeMillis());
     return JsonUtil.object(row);

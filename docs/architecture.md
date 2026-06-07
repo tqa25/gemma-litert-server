@@ -1,6 +1,6 @@
 # System Architecture
 
-Last updated: 2026-06-06
+Last updated: 2026-06-07
 
 ## System Goal
 
@@ -111,6 +111,24 @@ Chrome Discover feed already open
   -> save raw_text.txt, summary.txt, metadata.json
 ```
 
+The automation runtime now also supports a small n8n-like sequential JSON workflow engine. A JSON workflow is a list of typed nodes that pass outputs through `{{node.field}}` references:
+
+```text
+workflow JSON file
+  -> POST /automation/workflows/run-json
+  -> AutomationController executes nodes in order
+  -> node outputs are kept in run state
+  -> run files and workflow_log.jsonl are saved under automation_runs/{run_id}
+```
+
+Initial node types:
+
+```text
+tap_coordinate, tap, swipe, wait, current_app, dump_xml, screenshot,
+extract_text_from_xml, gemma_summarize, gemma_generate, save_file,
+assert_text_contains, back, home, open_app, capture_debug
+```
+
 ## Modules
 
 ### Android Backend App
@@ -134,7 +152,7 @@ Important files:
 - `MainActivity.java`: UI, model picker, server controls, OCR Runner, image compression for Fast OCR, copy-to-clipboard, OCR History persistence/rendering.
 - `ServerService.java`: foreground service lifecycle, runner creation, server lifecycle.
 - `HttpApiServer.java`: `GET /health`, `POST /generate`, request parsing, benchmark logging, diagnostics updates.
-- `AutomationController.java`: automation status, stop flag, primitives, calibration config, Chrome Discover + Gemini workflow, local run storage.
+- `AutomationController.java`: automation status, stop flag, primitives, calibration config, fixed Chrome workflows, sequential JSON workflow runner, local run storage.
 - `ShizukuShellExecutor.java`: executes shell commands through Shizuku after binder and permission checks.
 - `AutomationConfig.java`: default package/timing/coordinate config for automation.
 - `FloatingAutomationService.java`: WindowManager overlay for fullscreen Chrome calibration and manual automation controls.
@@ -276,6 +294,9 @@ POST /automation/calibrate
 POST /automation/workflows/run
   {"workflow":"chrome-discover-reading-gemma-summary-once","debug_capture":true}
   {"workflow":"chrome-discover-gemini-summary-once","debug_capture":true}
+
+POST /automation/workflows/run-json
+  {"workflow":"chrome-discover-visible-xml-summary","steps":[...]}
 ```
 
 Important MVP constraints:

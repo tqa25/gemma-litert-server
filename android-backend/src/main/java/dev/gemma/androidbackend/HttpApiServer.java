@@ -103,6 +103,9 @@ final class HttpApiServer extends NanoHTTPD {
     if (Method.POST.equals(method) && "/automation/workflows/run".equals(path)) {
       return json(Response.Status.OK, automation.runWorkflowJson(body));
     }
+    if (Method.POST.equals(method) && "/automation/workflows/run-json".equals(path)) {
+      return json(Response.Status.OK, automation.runJsonWorkflowJson(body));
+    }
     return json(Response.Status.NOT_FOUND, JsonUtil.error("not_found", "Unknown automation route"));
   }
 

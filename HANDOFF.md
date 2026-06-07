@@ -30,6 +30,7 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - Termux test plan: `docs/termux-client-test-plan.md`
 - Termux client: `termux-bridge/client.py`
 - Termux automation client: `termux-bridge/automation_client.py`
+- Example JSON workflow: `docs/automation-workflows/chrome_discover_visible_xml_summary.json`
 - Termux client tests: `termux-bridge/test_client.py`
 - Android backend entry points:
   - `android-backend/src/main/java/dev/gemma/androidbackend/MainActivity.java`
@@ -39,6 +40,13 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
   - `android-backend/src/main/java/dev/gemma/androidbackend/AutomationController.java`
   - `android-backend/src/main/java/dev/gemma/androidbackend/ShizukuShellExecutor.java`
   - `android-backend/src/main/java/dev/gemma/androidbackend/AutomationConfig.java`
+
+## Current Device Debug State
+
+- Tap calibration is no longer the main problem. The yellow tap indicator appears at the expected coordinates and the tap pipeline reaches Chrome.
+- Latest ROG Phone 6 log shows article tap, Chrome menu tap, and `Show Reading mode` tap all succeed.
+- The current failure is the Reading Mode scroll/extract step. The backend calls `swipe`, and Android returns `java.lang.SecurityException: Injecting to another application requires INJECT_EVENTS permission`.
+- Next implementation step should replace or bypass the current cross-app swipe strategy for Reading Mode extraction while staying Shizuku-compatible.
 
 ## Recent Commits
 
@@ -74,6 +82,7 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - Shizuku dependencies were added: `dev.rikka.shizuku:api:13.1.5` and `dev.rikka.shizuku:provider:13.1.5`; manifest now includes `rikka.shizuku.ShizukuProvider`.
 - `gradle.properties` now sets `android.useAndroidX=true` because Shizuku provider depends on AndroidX annotation.
 - Termux automation CLI supports status, stop, current-app, tap, swipe, home, back, longpress-home, wait, screenshot, screen-xml, open-app, calibration, and workflow run.
+- Termux automation CLI also supports `run-json --file <workflow.json>` for the new n8n-like sequential workflow runner.
 - Floating overlay supports Capture, Mark Article, Mark Menu, Mark Reading, Mark Summary, Mark Copy, Run Reading, Run Gemini, Stop, and Hide.
 - Floating overlay crosshair is a small independent `+` target with a separate Save/Cancel panel, so it can be dragged to screen edges such as Chrome's `...` button.
 - Android app has an Automation Log terminal with Copy/Clear buttons. Termux can also call `automation_client.py logs` and `automation_client.py clear-logs`.
@@ -81,6 +90,8 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - Automation Log is displayed in a fixed-height scroll box to avoid the full app jumping while logs update.
 - Calibration target and auto-running tap indicator use a yellow dot centered on the exact tap coordinate.
 - Tap indicator overlay is non-touchable, fixing the case where the yellow dot appeared at the right coordinate but intercepted the actual `input tap`.
+- New automation architecture foundation exists: `POST /automation/workflows/run-json` runs JSON workflows made of typed nodes, and node outputs can be referenced with `{{node.field}}`.
+- Initial JSON node types are `tap_coordinate`, `tap`, `swipe`, `wait`, `current_app`, `dump_xml`, `screenshot`, `extract_text_from_xml`, `gemma_summarize`, `gemma_generate`, `save_file`, `assert_text_contains`, `back`, `home`, `open_app`, and `capture_debug`.
 - Preferred reusable workflow is `chrome-discover-reading-gemma-summary-once`.
 - Fallback Gemini overlay workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
