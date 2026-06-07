@@ -227,6 +227,7 @@ test3:
 - Automation workflow has not yet been fully device-validated on ROG Phone 6.
 - ROG Phone 6 device checkpoint after APK run `27081096555`: Shizuku became available, permission prompt was granted after first shell action, and primitives passed for `current-app`, `screenshot --output screen.png`, and `screen-xml --output screen.xml`.
 - Floating overlay requires Android "Display over other apps" permission. The app exposes buttons to open overlay permission settings and show/hide floating automation controls.
+- Floating overlay crosshair is now a small independent `+` target with separate Save/Cancel controls, so it can be moved to screen edges such as Chrome's `...` button.
 
 ## Verification Commands
 

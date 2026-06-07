@@ -75,6 +75,7 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - `gradle.properties` now sets `android.useAndroidX=true` because Shizuku provider depends on AndroidX annotation.
 - Termux automation CLI supports status, stop, current-app, tap, swipe, home, back, longpress-home, wait, screenshot, screen-xml, open-app, calibration, and workflow run.
 - Floating overlay supports Capture, Mark Article, Mark Menu, Mark Reading, Mark Summary, Mark Copy, Run Reading, Run Gemini, Stop, and Hide.
+- Floating overlay crosshair is a small independent `+` target with a separate Save/Cancel panel, so it can be dragged to screen edges such as Chrome's `...` button.
 - Preferred reusable workflow is `chrome-discover-reading-gemma-summary-once`.
 - Fallback Gemini overlay workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.

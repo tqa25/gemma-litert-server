@@ -30,6 +30,7 @@ public final class FloatingAutomationService extends Service {
   private View bubble;
   private View menu;
   private View crosshair;
+  private View crosshairControls;
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
@@ -46,6 +47,7 @@ public final class FloatingAutomationService extends Service {
   @Override
   public void onDestroy() {
     removeView(crosshair);
+    removeView(crosshairControls);
     removeView(menu);
     removeView(bubble);
     executor.shutdownNow();
@@ -122,27 +124,40 @@ public final class FloatingAutomationService extends Service {
     removeView(menu);
     menu = null;
     removeView(crosshair);
-    LinearLayout layout = new LinearLayout(this);
-    layout.setOrientation(LinearLayout.VERTICAL);
-    layout.setPadding(10, 10, 10, 10);
-    layout.setBackgroundColor(0xdd003344);
+    removeView(crosshairControls);
     TextView target = new TextView(this);
-    target.setText("+\n" + key);
+    target.setText("+");
     target.setTextColor(0xffffffff);
     target.setGravity(Gravity.CENTER);
-    target.setTextSize(20f);
-    layout.addView(target);
-    layout.addView(menuButton("Save", v -> saveCrosshair(key)));
-    layout.addView(menuButton("Cancel", v -> {
-      removeView(crosshair);
-      crosshair = null;
-    }));
-    WindowManager.LayoutParams params = overlayParams(300, WindowManager.LayoutParams.WRAP_CONTENT);
-    params.x = 390;
+    target.setTextSize(36f);
+    target.setBackgroundColor(0xdd003344);
+    WindowManager.LayoutParams params = overlayParams(72, 72);
+    params.x = 504;
     params.y = 900;
-    makeDraggable(layout, params);
-    crosshair = layout;
+    makeDraggable(target, params);
+    crosshair = target;
     windowManager.addView(crosshair, params);
+
+    LinearLayout controls = new LinearLayout(this);
+    controls.setOrientation(LinearLayout.VERTICAL);
+    controls.setPadding(10, 10, 10, 10);
+    controls.setBackgroundColor(0xee222222);
+    TextView label = new TextView(this);
+    label.setText(key);
+    label.setTextColor(0xffffffff);
+    controls.addView(label);
+    controls.addView(menuButton("Save", v -> saveCrosshair(key)));
+    controls.addView(menuButton("Cancel", v -> {
+      removeView(crosshair);
+      removeView(crosshairControls);
+      crosshair = null;
+      crosshairControls = null;
+    }));
+    WindowManager.LayoutParams controlParams = overlayParams(360, WindowManager.LayoutParams.WRAP_CONTENT);
+    controlParams.x = 24;
+    controlParams.y = 1450;
+    crosshairControls = controls;
+    windowManager.addView(crosshairControls, controlParams);
     toast("Drag crosshair to target, then Save");
   }
 
@@ -150,11 +165,13 @@ public final class FloatingAutomationService extends Service {
     if (crosshair == null) return;
     WindowManager.LayoutParams params = (WindowManager.LayoutParams) crosshair.getLayoutParams();
     int x = params.x + crosshair.getWidth() / 2;
-    int y = params.y + 32;
+    int y = params.y + crosshair.getHeight() / 2;
     String body = "{\"key\":\"" + key + "\",\"x\":" + x + ",\"y\":" + y + "}";
     runHttp("calibrate", () -> post("/automation/calibrate", body));
     removeView(crosshair);
+    removeView(crosshairControls);
     crosshair = null;
+    crosshairControls = null;
   }
 
   private void makeDraggable(View view, WindowManager.LayoutParams params) {
