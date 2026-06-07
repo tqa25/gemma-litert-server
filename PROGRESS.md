@@ -293,6 +293,17 @@ Downloaded APK: /tmp/apk-artifact-27081804289/gemma-android-backend-debug-apk/an
 APK size: 26097862 bytes
 ```
 
+Latest compact crosshair APK:
+
+```text
+Workflow: Android Backend APK
+Run: https://github.com/tqa25/gemma-litert-server/actions/runs/27082044857
+Commit: d82e1f7
+Artifact: gemma-android-backend-debug-apk
+Downloaded APK: /tmp/apk-artifact-27082044857/gemma-android-backend-debug-apk/android-backend-debug.apk
+APK size: 26097990 bytes
+```
+
 Automation device commands after installing an APK built on GitHub Actions:
 
 ```bash
