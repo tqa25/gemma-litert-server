@@ -62,8 +62,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = dispatch(args)
         if result is not None:
-          print_json(result)
+            print_json(result)
         return 0
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        if detail:
+            print(f"ERROR: backend returned HTTP {exc.code}: {detail}", file=sys.stderr)
+        else:
+            print(f"ERROR: backend returned HTTP {exc.code}: {exc.reason}", file=sys.stderr)
+        return 1
     except urllib.error.URLError as exc:
         print(f"ERROR: cannot reach backend: {exc}", file=sys.stderr)
         return 1
