@@ -203,6 +203,21 @@ APK size: 26088786 bytes
 
 Device debug note: user reached `shizuku_available=true` and `shizuku_permission_granted=true`, but primitive commands failed with `{"message":"process hasn't exited"}`. Commit `b2bdef2` changes `ShizukuShellExecutor` to wait through ShizukuRemoteProcess `waitForTimeout` and then read the exit code via `waitFor()`.
 
+Latest device checkpoint after installing the fix APK:
+
+```text
+python3 termux-bridge/automation_client.py current-app
+  -> package: com.termux
+
+python3 termux-bridge/automation_client.py screenshot --output screen.png
+  -> ok, image_bytes: 278065
+
+python3 termux-bridge/automation_client.py screen-xml --output screen.xml
+  -> ok, xml_chars: 5897
+```
+
+This confirms Shizuku shell primitives are working on the ROG Phone 6. The first status after reinstall showed permission false; running `current-app` triggered permission handling, and the next `current-app` succeeded.
+
 Previous OCR work added optional Termux-side image preprocessing for upload/latency experiments:
 
 ```bash

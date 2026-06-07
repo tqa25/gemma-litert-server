@@ -219,7 +219,8 @@ test3:
 - Shizuku API integration uses `dev.rikka.shizuku:api/provider:13.1.5` and requires the user to have Shizuku running and grant permission to the app.
 - Shizuku shell execution currently uses reflection against Shizuku's private `newProcess` method because API 13.1.5 no longer exposes it publicly. It now waits through ShizukuRemoteProcess `waitForTimeout` when available. If runtime still blocks this, replace it with a Shizuku UserService implementation.
 - Clipboard reading after Gemini copy must be validated on device; Android clipboard foreground restrictions may require adjustments.
-- Automation workflow has not yet been device-validated on ROG Phone 6.
+- Automation workflow has not yet been fully device-validated on ROG Phone 6.
+- ROG Phone 6 device checkpoint after APK run `27081096555`: Shizuku became available, permission prompt was granted after first shell action, and primitives passed for `current-app`, `screenshot --output screen.png`, and `screen-xml --output screen.xml`.
 
 ## Verification Commands
 
