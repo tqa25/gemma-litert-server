@@ -73,6 +73,17 @@ Termux automation client
   -> JSON response and app-private automation run files
 ```
 
+Android floating overlay:
+
+```text
+MainActivity
+  -> user grants Display over other apps
+  -> FloatingAutomationService
+  -> draggable "G" bubble over Chrome/Gemini
+  -> menu actions call localhost /automation/*
+  -> draggable crosshair saves calibration coordinates
+```
+
 The first workflow is not a general autonomous agent. It is a calibrated macro with guardrails for the user's real Chrome workflow:
 
 ```text
@@ -113,6 +124,7 @@ Important files:
 - `AutomationController.java`: automation status, stop flag, primitives, calibration config, Chrome Discover + Gemini workflow, local run storage.
 - `ShizukuShellExecutor.java`: executes shell commands through Shizuku after binder and permission checks.
 - `AutomationConfig.java`: default package/timing/coordinate config for automation.
+- `FloatingAutomationService.java`: WindowManager overlay for fullscreen Chrome calibration and manual automation controls.
 - `LiteRtGemmaRunner.java`: LiteRT-LM Android engine wrapper.
 - `MockGemmaRunner.java`: mock backend for request-path testing.
 - `RequestDiagnostics.java`: latest request state for UI and `/health`.

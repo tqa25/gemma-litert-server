@@ -70,9 +70,11 @@ Termux automation CLI -> localhost /automation/* -> Android backend -> Shizuku s
 - LiteRT GPU backend is enabled with `Backend.GPU()` for both model and vision backend.
 - CPU backend is still available from the app for comparison/debug.
 - Initial automation API exists under `/automation/*`.
+- Initial floating automation overlay exists; MainActivity has buttons to enable overlay permission and show/hide controls.
 - Shizuku dependencies were added: `dev.rikka.shizuku:api:13.1.5` and `dev.rikka.shizuku:provider:13.1.5`; manifest now includes `rikka.shizuku.ShizukuProvider`.
 - `gradle.properties` now sets `android.useAndroidX=true` because Shizuku provider depends on AndroidX annotation.
 - Termux automation CLI supports status, stop, current-app, tap, swipe, home, back, longpress-home, wait, screenshot, screen-xml, open-app, calibration, and workflow run.
+- Floating overlay supports Capture, Mark Article, Mark Summary, Mark Copy, Run Once, Stop, and Hide.
 - First workflow is `chrome-discover-gemini-summary-once`.
 - MVP start state is Chrome new tab / Discover feed already open. User confirmed Chrome articles open in the same tab and Back returns to Chrome Discover feed.
 - Latest successful APK build:
@@ -217,6 +219,8 @@ python3 termux-bridge/automation_client.py screen-xml --output screen.xml
 ```
 
 This confirms Shizuku shell primitives are working on the ROG Phone 6. The first status after reinstall showed permission false; running `current-app` triggered permission handling, and the next `current-app` succeeded.
+
+Latest local code checkpoint adds `FloatingAutomationService` for fullscreen Chrome calibration. It uses Android overlay permission and calls the same localhost automation API. It has not yet been APK-built or device-tested at this checkpoint until the next Actions run.
 
 Previous OCR work added optional Termux-side image preprocessing for upload/latency experiments:
 

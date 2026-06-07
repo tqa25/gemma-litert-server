@@ -16,6 +16,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.provider.OpenableColumns;
 import android.view.Gravity;
 import android.widget.Button;
@@ -136,6 +137,26 @@ public final class MainActivity extends Activity {
     stop.setText("Stop Server");
     stop.setOnClickListener(v -> stopServer());
     layout.addView(stop);
+
+    TextView automationTitle = new TextView(this);
+    automationTitle.setPadding(0, 32, 0, 8);
+    automationTitle.setText("Automation Overlay");
+    layout.addView(automationTitle);
+
+    Button overlayPermission = new Button(this);
+    overlayPermission.setText("Enable Overlay Permission");
+    overlayPermission.setOnClickListener(v -> openOverlayPermissionSettings());
+    layout.addView(overlayPermission);
+
+    Button showOverlay = new Button(this);
+    showOverlay.setText("Show Floating Automation Controls");
+    showOverlay.setOnClickListener(v -> showFloatingAutomation());
+    layout.addView(showOverlay);
+
+    Button hideOverlay = new Button(this);
+    hideOverlay.setText("Hide Floating Automation Controls");
+    hideOverlay.setOnClickListener(v -> hideFloatingAutomation());
+    layout.addView(hideOverlay);
 
     TextView ocrTitle = new TextView(this);
     ocrTitle.setPadding(0, 32, 0, 8);
@@ -660,6 +681,32 @@ public final class MainActivity extends Activity {
     status.setText("Gemma backend stopped");
     refreshModelStatus();
     refreshDiagnosticsStatus();
+  }
+
+  private void openOverlayPermissionSettings() {
+    if (Build.VERSION.SDK_INT < 23) {
+      status.setText("Overlay permission is not required on this Android version.");
+      return;
+    }
+    Intent intent = new Intent(
+        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+        Uri.parse("package:" + getPackageName()));
+    startActivity(intent);
+  }
+
+  private void showFloatingAutomation() {
+    if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(this)) {
+      status.setText("Enable overlay permission before showing floating controls.");
+      openOverlayPermissionSettings();
+      return;
+    }
+    startService(new Intent(this, FloatingAutomationService.class));
+    status.setText("Floating automation controls shown.");
+  }
+
+  private void hideFloatingAutomation() {
+    stopService(new Intent(this, FloatingAutomationService.class));
+    status.setText("Floating automation controls hidden.");
   }
 
   private void refreshDiagnosticsStatus() {

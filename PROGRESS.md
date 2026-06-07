@@ -83,6 +83,7 @@ Chrome new tab / Discover feed already open
 - Termux client supports `health`, `generate-text`, `generate-image`, and `benchmark-image`.
 - Termux image workflows support `--ocr-mode fast`, `--ocr-mode full`, and lower-level overrides.
 - Android backend now includes an initial Shizuku-backed automation API under `/automation/*`.
+- Android app now includes an initial floating automation overlay service for Chrome/Gemini calibration and manual workflow control.
 - Termux now includes `termux-bridge/automation_client.py` for automation status, primitives, calibration, screenshots/XML, and the first Chrome Discover + Gemini workflow.
 - First automation workflow name: `chrome-discover-gemini-summary-once`.
 
@@ -101,6 +102,7 @@ Chrome new tab / Discover feed already open
 - `android-backend/src/main/java/dev/gemma/androidbackend/AutomationController.java`: automation primitives, calibration, workflow runner, local run storage.
 - `android-backend/src/main/java/dev/gemma/androidbackend/ShizukuShellExecutor.java`: Shizuku shell command adapter.
 - `android-backend/src/main/java/dev/gemma/androidbackend/AutomationConfig.java`: automation defaults and calibration shape.
+- `android-backend/src/main/java/dev/gemma/androidbackend/FloatingAutomationService.java`: draggable floating `G` button, overlay menu, crosshair calibration, and workflow controls.
 - `android-backend/src/main/java/dev/gemma/androidbackend/LiteRtGemmaRunner.java`: LiteRT-LM Android runner.
 - `.github/workflows/android-backend-apk.yml`: APK build workflow.
 - `GITHUB_ACTIONS_APK_DEBUG_RUNBOOK.md`: required debug workflow for APK build failures.
@@ -206,6 +208,7 @@ test3:
 - Automation must use Shizuku first; Accessibility Service remains a later option.
 - Automation guardrails: start with package whitelist, stop/status endpoints, max run duration, calibration for fixed tap points, and stop-on-failure snapshot in debug/error paths.
 - Gemini overlay is the first summary backend; Gemma local can become a later `summary_backend` option after article extraction is reliable.
+- Use the Android floating automation overlay for fullscreen Chrome calibration instead of split screen.
 
 ## Known Issues And Caveats
 
@@ -221,6 +224,7 @@ test3:
 - Clipboard reading after Gemini copy must be validated on device; Android clipboard foreground restrictions may require adjustments.
 - Automation workflow has not yet been fully device-validated on ROG Phone 6.
 - ROG Phone 6 device checkpoint after APK run `27081096555`: Shizuku became available, permission prompt was granted after first shell action, and primitives passed for `current-app`, `screenshot --output screen.png`, and `screen-xml --output screen.xml`.
+- Floating overlay requires Android "Display over other apps" permission. The app exposes buttons to open overlay permission settings and show/hide floating automation controls.
 
 ## Verification Commands
 
